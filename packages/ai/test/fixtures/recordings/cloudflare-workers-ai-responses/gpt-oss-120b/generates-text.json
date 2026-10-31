@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "metadata": {
+    "model": "@cf/openai/gpt-oss-120b",
+    "tags": [
+      "prefix:cloudflare-workers-ai-responses/gpt-oss-120b",
+      "provider:cloudflare-workers-ai",
+      "protocol:open-responses",
+      "text",
+      "usage"
+    ],
+    "name": "cloudflare-workers-ai-responses/gpt-oss-120b/generates-text",
+    "recordedAt": "2026-10-31T21:27:38.099Z"
+  },
+  "interactions": [
+    {
+      "transport": "http",
+      "request": {
+        "method": "POST",
+        "url": "https://api.cloudflare.com/client/v4/accounts/{account}/ai/v1/responses",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": "{\"model\":\"@cf/openai/gpt-oss-120b\",\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"Reply exactly: OK\"}]}],\"stream\":false,\"max_output_tokens\":256,\"store\":false}"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": "{\"id\":\"id-1793482058154\",\"created_at\":1793482058,\"incomplete_details\":null,\"instructions\":null,\"metadata\":null,\"model\":\"@cf/openai/gpt-oss-120b\",\"object\":\"response\",\"output\":[{\"id\":\"rs_b70307896c5bdc90\",\"summary\":[],\"type\":\"reasoning\",\"content\":[{\"text\":\"The user says: \\\"Reply exactly: OK\\\". So we need to output exactly \\\"OK\\\". No extra punctuation, no explanations. Probably with no formatting, just plain text. Ensure it's exactly \\\"OK\\\".\",\"type\":\"reasoning_text\"}],\"encrypted_content\":null,\"status\":null},{\"id\":\"msg_ae4d986117e53fb4\",\"content\":[{\"annotations\":[],\"text\":\"OK\",\"type\":\"output_text\",\"logprobs\":null}],\"role\":\"assistant\",\"status\":\"completed\",\"type\":\"message\",\"phase\":null}],\"parallel_tool_calls\":true,\"temperature\":1,\"tool_choice\":\"none\",\"tools\":[],\"top_p\":1,\"background\":false,\"max_output_tokens\":256,\"max_tool_calls\":null,\"previous_response_id\":null,\"prompt\":null,\"reasoning\":null,\"service_tier\":\"auto\",\"status\":\"completed\",\"text\":null,\"top_logprobs\":null,\"truncation\":\"disabled\",\"usage\":{\"input_tokens\":71,\"output_tokens\":52,\"total_tokens\":123,\"neurons\":3.768179416656494},\"user\":null,\"presence_penalty\":0,\"frequency_penalty\":0,\"kv_transfer_params\":null,\"ec_transfer_params\":null,\"input_messages\":null,\"output_messages\":null}"
+      }
+    }
+  ]
+}

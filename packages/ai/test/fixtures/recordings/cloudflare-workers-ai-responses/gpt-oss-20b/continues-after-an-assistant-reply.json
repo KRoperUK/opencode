@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "metadata": {
+    "model": "@cf/openai/gpt-oss-20b",
+    "tags": [
+      "prefix:cloudflare-workers-ai-responses/gpt-oss-20b",
+      "provider:cloudflare-workers-ai",
+      "protocol:open-responses",
+      "text",
+      "multi-turn"
+    ],
+    "name": "cloudflare-workers-ai-responses/gpt-oss-20b/continues-after-an-assistant-reply",
+    "recordedAt": "2026-10-31T21:27:35.406Z"
+  },
+  "interactions": [
+    {
+      "transport": "http",
+      "request": {
+        "method": "POST",
+        "url": "https://api.cloudflare.com/client/v4/accounts/{account}/ai/v1/responses",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": "{\"model\":\"@cf/openai/gpt-oss-20b\",\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"Remember the word maple. Reply exactly: OK\"}]}],\"stream\":false,\"max_output_tokens\":256,\"store\":false}"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": "{\"id\":\"id-1793482054813\",\"created_at\":1793482054,\"incomplete_details\":null,\"instructions\":null,\"metadata\":null,\"model\":\"@cf/openai/gpt-oss-20b\",\"object\":\"response\",\"output\":[{\"id\":\"rs_1abfda5bec2a4e89b938469faddb00a7\",\"summary\":[],\"type\":\"reasoning\",\"content\":[{\"text\":\"User command: \\\"Remember the word maple. Reply exactly: OK\\\". They want me to reply exactly \\\"OK\\\". I need to recall \\\"maple\\\" but not output it. So I just output \\\"OK\\\".\",\"type\":\"reasoning_text\"}],\"encrypted_content\":null,\"status\":null},{\"id\":\"msg_4fb3f512837d4bebb4c641b12a7c2379\",\"content\":[{\"annotations\":[],\"text\":\"OK\",\"type\":\"output_text\",\"logprobs\":null}],\"role\":\"assistant\",\"status\":\"completed\",\"type\":\"message\"}],\"input_messages\":null,\"output_messages\":null,\"parallel_tool_calls\":true,\"temperature\":1,\"tool_choice\":\"auto\",\"tools\":[],\"top_p\":1,\"background\":false,\"max_output_tokens\":256,\"max_tool_calls\":null,\"previous_response_id\":null,\"prompt\":null,\"reasoning\":null,\"service_tier\":\"auto\",\"status\":\"completed\",\"text\":null,\"top_logprobs\":null,\"truncation\":\"disabled\",\"usage\":{\"input_tokens\":74,\"output_tokens\":54,\"total_tokens\":128,\"neurons\":2.818179},\"user\":null}"
+      }
+    },
+    {
+      "transport": "http",
+      "request": {
+        "method": "POST",
+        "url": "https://api.cloudflare.com/client/v4/accounts/{account}/ai/v1/responses",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": "{\"model\":\"@cf/openai/gpt-oss-20b\",\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"Remember the word maple. Reply exactly: OK\"}]},{\"type\":\"reasoning\",\"id\":\"rs_1abfda5bec2a4e89b938469faddb00a7\",\"summary\":[{\"type\":\"summary_text\",\"text\":\"User command: \\\"Remember the word maple. Reply exactly: OK\\\". They want me to reply exactly \\\"OK\\\". I need to recall \\\"maple\\\" but not output it. So I just output \\\"OK\\\".\"}],\"encrypted_content\":null,\"content\":[{\"type\":\"reasoning_text\",\"text\":\"User command: \\\"Remember the word maple. Reply exactly: OK\\\". They want me to reply exactly \\\"OK\\\". I need to recall \\\"maple\\\" but not output it. So I just output \\\"OK\\\".\"}]},{\"type\":\"message\",\"id\":\"msg_4fb3f512837d4bebb4c641b12a7c2379\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"text\":\"OK\",\"annotations\":[]}]},{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"Which word did I ask you to remember? Reply with the word only.\"}]}],\"stream\":false,\"max_output_tokens\":256,\"store\":false}"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": "{\"id\":\"id-1793482055458\",\"created_at\":1793482055,\"incomplete_details\":null,\"instructions\":null,\"metadata\":null,\"model\":\"@cf/openai/gpt-oss-20b\",\"object\":\"response\",\"output\":[{\"id\":\"rs_43f4cafb474f4fda85fcd79b54f8d5e4\",\"summary\":[],\"type\":\"reasoning\",\"content\":[{\"text\":\"User says: \\\"Which word did I ask you to remember? Reply with the word only.\\\" They want me to recall the word, \\\"maple\\\". So reply with \\\"maple\\\".\",\"type\":\"reasoning_text\"}],\"encrypted_content\":null,\"status\":null},{\"id\":\"msg_ac887fe78a3348a089f1d0b055ba3f92\",\"content\":[{\"annotations\":[],\"text\":\"maple\",\"type\":\"output_text\",\"logprobs\":null}],\"role\":\"assistant\",\"status\":\"completed\",\"type\":\"message\"}],\"input_messages\":null,\"output_messages\":null,\"parallel_tool_calls\":true,\"temperature\":1,\"tool_choice\":\"auto\",\"tools\":[],\"top_p\":1,\"background\":false,\"max_output_tokens\":256,\"max_tool_calls\":null,\"previous_response_id\":null,\"prompt\":null,\"reasoning\":null,\"service_tier\":\"auto\",\"status\":\"completed\",\"text\":null,\"top_logprobs\":null,\"truncation\":\"disabled\",\"usage\":{\"input_tokens\":147,\"output_tokens\":50,\"total_tokens\":197,\"neurons\":4.0363596},\"user\":null}"
+      }
+    }
+  ]
+}

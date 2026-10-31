@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "metadata": {
+    "model": "@cf/openai/gpt-oss-120b",
+    "tags": [
+      "prefix:cloudflare-workers-ai-responses/gpt-oss-120b",
+      "provider:cloudflare-workers-ai",
+      "protocol:open-responses",
+      "text",
+      "multi-turn"
+    ],
+    "name": "cloudflare-workers-ai-responses/gpt-oss-120b/continues-after-an-assistant-reply",
+    "recordedAt": "2026-10-31T21:27:41.465Z"
+  },
+  "interactions": [
+    {
+      "transport": "http",
+      "request": {
+        "method": "POST",
+        "url": "https://api.cloudflare.com/client/v4/accounts/{account}/ai/v1/responses",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": "{\"model\":\"@cf/openai/gpt-oss-120b\",\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"Remember the word maple. Reply exactly: OK\"}]}],\"stream\":false,\"max_output_tokens\":256,\"store\":false}"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": "{\"id\":\"id-1793482060344\",\"created_at\":1793482060,\"incomplete_details\":null,\"instructions\":null,\"metadata\":null,\"model\":\"@cf/openai/gpt-oss-120b\",\"object\":\"response\",\"output\":[{\"id\":\"rs_8dcb0462541d3fc9\",\"summary\":[],\"type\":\"reasoning\",\"content\":[{\"text\":\"The user says: \\\"Remember the word maple. Reply exactly: OK\\\". So we need to output exactly \\\"OK\\\". No extra punctuation or whitespace. Likely case-sensitive. So respond with \\\"OK\\\".\",\"type\":\"reasoning_text\"}],\"encrypted_content\":null,\"status\":null},{\"id\":\"msg_b33ae18eb364cdea\",\"content\":[{\"annotations\":[],\"text\":\"OK\",\"type\":\"output_text\",\"logprobs\":null}],\"role\":\"assistant\",\"status\":\"completed\",\"type\":\"message\",\"phase\":null}],\"parallel_tool_calls\":true,\"temperature\":1,\"tool_choice\":\"none\",\"tools\":[],\"top_p\":1,\"background\":false,\"max_output_tokens\":256,\"max_tool_calls\":null,\"previous_response_id\":null,\"prompt\":null,\"reasoning\":null,\"service_tier\":\"auto\",\"status\":\"completed\",\"text\":null,\"top_logprobs\":null,\"truncation\":\"disabled\",\"usage\":{\"input_tokens\":76,\"output_tokens\":52,\"total_tokens\":128,\"neurons\":3.927269458770752},\"user\":null,\"presence_penalty\":0,\"frequency_penalty\":0,\"kv_transfer_params\":null,\"ec_transfer_params\":null,\"input_messages\":null,\"output_messages\":null}"
+      }
+    },
+    {
+      "transport": "http",
+      "request": {
+        "method": "POST",
+        "url": "https://api.cloudflare.com/client/v4/accounts/{account}/ai/v1/responses",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": "{\"model\":\"@cf/openai/gpt-oss-120b\",\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"Remember the word maple. Reply exactly: OK\"}]},{\"type\":\"reasoning\",\"id\":\"rs_8dcb0462541d3fc9\",\"summary\":[{\"type\":\"summary_text\",\"text\":\"The user says: \\\"Remember the word maple. Reply exactly: OK\\\". So we need to output exactly \\\"OK\\\". No extra punctuation or whitespace. Likely case-sensitive. So respond with \\\"OK\\\".\"}],\"encrypted_content\":null,\"content\":[{\"type\":\"reasoning_text\",\"text\":\"The user says: \\\"Remember the word maple. Reply exactly: OK\\\". So we need to output exactly \\\"OK\\\". No extra punctuation or whitespace. Likely case-sensitive. So respond with \\\"OK\\\".\"}]},{\"type\":\"message\",\"id\":\"msg_b33ae18eb364cdea\",\"role\":\"assistant\",\"status\":\"completed\",\"content\":[{\"type\":\"output_text\",\"text\":\"OK\",\"annotations\":[]}],\"phase\":null},{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"Which word did I ask you to remember? Reply with the word only.\"}]}],\"stream\":false,\"max_output_tokens\":256,\"store\":false}"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": "{\"id\":\"id-1793482061519\",\"created_at\":1793482061,\"incomplete_details\":null,\"instructions\":null,\"metadata\":null,\"model\":\"@cf/openai/gpt-oss-120b\",\"object\":\"response\",\"output\":[{\"id\":\"rs_ac84b703e2dfb319\",\"summary\":[],\"type\":\"reasoning\",\"content\":[{\"text\":\"The user asked: \\\"Which word did I ask you to remember? Reply with the word only.\\\"\\n\\nWe need to answer with just the word. The word was \\\"maple\\\". Provide exactly \\\"maple\\\".\",\"type\":\"reasoning_text\"}],\"encrypted_content\":null,\"status\":null},{\"id\":\"msg_868639ef8cd3b427\",\"content\":[{\"annotations\":[],\"text\":\"maple\",\"type\":\"output_text\",\"logprobs\":null}],\"role\":\"assistant\",\"status\":\"completed\",\"type\":\"message\",\"phase\":null}],\"parallel_tool_calls\":true,\"temperature\":1,\"tool_choice\":\"none\",\"tools\":[],\"top_p\":1,\"background\":false,\"max_output_tokens\":256,\"max_tool_calls\":null,\"previous_response_id\":null,\"prompt\":null,\"reasoning\":null,\"service_tier\":\"auto\",\"status\":\"completed\",\"text\":null,\"top_logprobs\":null,\"truncation\":\"disabled\",\"usage\":{\"input_tokens\":102,\"output_tokens\":54,\"total_tokens\":156,\"neurons\":4.8909010887146},\"user\":null,\"presence_penalty\":0,\"frequency_penalty\":0,\"kv_transfer_params\":null,\"ec_transfer_params\":null,\"input_messages\":null,\"output_messages\":null}"
+      }
+    }
+  ]
+}

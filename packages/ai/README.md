@@ -1498,8 +1498,10 @@ const fireworks = Fireworks.configure({ apiKey }).model("accounts/fireworks/mode
 Fireworks, Groq, and Cloudflare Workers AI also select their Responses API with `responses(modelID)`, or through
 `providers/fireworks/responses`, `providers/groq/responses`, and `providers/cloudflare-workers-ai/responses`. They use
 the provider-neutral Open Responses protocol with `store: false`. Groq rejects `include`, so its reasoning is not
-replayed as encrypted content. Workers AI returns the complete Response instead of a stream, and its endpoint rejects
-`function_call_output` input, so tool results cannot be sent back on that route.
+replayed as encrypted content. Workers AI serves Responses only for gpt-oss, returns the complete Response instead of a
+stream, and accepts only automatic tool choice. It rejects replayed items that differ from its own output items, so
+that route replays history in Cloudflare's output shape and gives each tool the Chat Completions `function` member
+too, which gpt-oss-120b reads.
 
 The former `OpenAICompatible.baseten`, `.cerebras`, `.deepinfra`, `.deepseek`, `.fireworks`, `.groq`, and `.togetherai` presets are replaced by the top-level `Baseten`, `Cerebras`, `DeepInfra`, `DeepSeek`, `Fireworks`, `Groq`, and `TogetherAI` exports. Use `CloudflareAIGateway` and `CloudflareWorkersAI` directly; each has its own module. `OpenAICompatible` configures generic endpoints with an explicit `baseURL`.
 

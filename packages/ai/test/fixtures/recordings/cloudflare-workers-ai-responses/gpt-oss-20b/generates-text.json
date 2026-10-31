@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "metadata": {
+    "model": "@cf/openai/gpt-oss-20b",
+    "tags": [
+      "prefix:cloudflare-workers-ai-responses/gpt-oss-20b",
+      "provider:cloudflare-workers-ai",
+      "protocol:open-responses",
+      "text",
+      "usage"
+    ],
+    "name": "cloudflare-workers-ai-responses/gpt-oss-20b/generates-text",
+    "recordedAt": "2026-10-31T21:27:33.213Z"
+  },
+  "interactions": [
+    {
+      "transport": "http",
+      "request": {
+        "method": "POST",
+        "url": "https://api.cloudflare.com/client/v4/accounts/{account}/ai/v1/responses",
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": "{\"model\":\"@cf/openai/gpt-oss-20b\",\"input\":[{\"type\":\"message\",\"role\":\"user\",\"content\":[{\"type\":\"input_text\",\"text\":\"Reply exactly: OK\"}]}],\"stream\":false,\"max_output_tokens\":256,\"store\":false}"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": "{\"id\":\"id-1793482053266\",\"created_at\":1793482053,\"incomplete_details\":null,\"instructions\":null,\"metadata\":null,\"model\":\"@cf/openai/gpt-oss-20b\",\"object\":\"response\",\"output\":[{\"id\":\"rs_d11b1637a4e34943a50a48ddf914d17b\",\"summary\":[],\"type\":\"reasoning\",\"content\":[{\"text\":\"The user says: \\\"Reply exactly: OK\\\". So they want the assistant to reply exactly \\\"OK\\\". That's all. So final answer: OK.\",\"type\":\"reasoning_text\"}],\"encrypted_content\":null,\"status\":null},{\"id\":\"msg_57202806672b4696a29e6c8ef17b2241\",\"content\":[{\"annotations\":[],\"text\":\"OK\",\"type\":\"output_text\",\"logprobs\":null}],\"role\":\"assistant\",\"status\":\"completed\",\"type\":\"message\"}],\"input_messages\":null,\"output_messages\":null,\"parallel_tool_calls\":true,\"temperature\":1,\"tool_choice\":\"auto\",\"tools\":[],\"top_p\":1,\"background\":false,\"max_output_tokens\":256,\"max_tool_calls\":null,\"previous_response_id\":null,\"prompt\":null,\"reasoning\":null,\"service_tier\":\"auto\",\"status\":\"completed\",\"text\":null,\"top_logprobs\":null,\"truncation\":\"disabled\",\"usage\":{\"input_tokens\":69,\"output_tokens\":41,\"total_tokens\":110,\"neurons\":2.3727248999999997},\"user\":null}"
+      }
+    }
+  ]
+}

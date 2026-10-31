@@ -1,15 +1,10 @@
 import { expect } from "bun:test"
 import { Effect, Schema } from "effect"
-import { ai, LLMEvent, toDefinitions } from "../../src/effect.js"
+import { ai, LLMEvent, LLMRequest, Message, toDefinitions } from "../../src/effect.js"
 import { CloudflareWorkersAI, DigitalOcean, Fireworks, Groq, OpenRouter, Venice } from "../../src/providers.js"
 import { LLMClient } from "../../src/route.js"
 import { tool } from "../../src/tool.js"
-import {
-  expectWeatherToolLoop,
-  runWeatherToolLoop,
-  weatherTool,
-  weatherToolLoopRequest,
-} from "../recorded-scenarios.js"
+import { expectWeatherToolLoop, runWeatherToolLoop, weatherToolLoopRequest } from "../recorded-scenarios.js"
 import { recordedTests } from "../recorded-test.js"
 
 const run = toDefinitions([
@@ -111,44 +106,64 @@ for (const item of [
   )
 }
 
-// Workers AI answers Responses with the complete Response, and its endpoint rejects `function_call_output`
-// input, so only a single tool call is covered.
-const workers = CloudflareWorkersAI.configure({
-  accountId: process.env.CLOUDFLARE_ACCOUNT_ID ?? "fixture-account",
-  apiKey: process.env.CLOUDFLARE_API_KEY ?? "fixture",
-}).responses("@cf/openai/gpt-oss-20b")
-const workersRecorded = recordedTests({
-  prefix: "cloudflare-workers-ai-responses",
-  provider: "cloudflare-workers-ai",
-  protocol: "open-responses",
-  requires: ["CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_KEY"],
-  metadata: { model: workers.id },
-  options: { redact: { url: (url) => url.replace(/\/accounts\/[^/]+\/ai\//, "/accounts/{account}/ai/") } },
-})
+// Workers AI only serves gpt-oss on Responses, and answers with the complete Response rather than a stream.
+for (const model of ["gpt-oss-20b", "gpt-oss-120b"]) {
+  const workers = CloudflareWorkersAI.configure({
+    accountId: process.env.CLOUDFLARE_ACCOUNT_ID ?? "fixture-account",
+    apiKey: process.env.CLOUDFLARE_API_KEY ?? "fixture",
+  }).responses(`@cf/openai/${model}`)
+  const recorded = recordedTests({
+    prefix: `cloudflare-workers-ai-responses/${model}`,
+    provider: "cloudflare-workers-ai",
+    protocol: "open-responses",
+    requires: ["CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_KEY"],
+    metadata: { model: workers.id },
+    options: { redact: { url: (url) => url.replace(/\/accounts\/[^/]+\/ai\//, "/accounts/{account}/ai/") } },
+  })
 
-workersRecorded.effect.with("generates text", { tags: ["text", "usage"] }, () =>
-  Effect.gen(function* () {
-    const response = yield* LLMClient.generate(
-      ai.request({ model: workers, prompt: "Reply exactly: OK", generation: { maxTokens: 256 } }),
-    )
-    expect(response.text.trim()).toMatch(/^OK\.?$/)
-    expect(response.finishReason.normalized).toBe("stop")
-    expect(response.usage.outputTokens).toBeGreaterThan(0)
-  }),
-)
+  recorded.effect.with("generates text", { tags: ["text", "usage"] }, () =>
+    Effect.gen(function* () {
+      const response = yield* LLMClient.generate(
+        ai.request({ model: workers, prompt: "Reply exactly: OK", generation: { maxTokens: 256 } }),
+      )
+      expect(response.text.trim()).toMatch(/^OK\.?$/)
+      expect(response.finishReason.normalized).toBe("stop")
+      expect(response.usage.outputTokens).toBeGreaterThan(0)
+    }),
+  )
 
-workersRecorded.effect.with("calls a tool", { tags: ["tool"] }, () =>
-  Effect.gen(function* () {
-    const response = yield* LLMClient.generate(
-      ai.request({
+  recorded.effect.with("continues a tool call", { tags: ["tool", "tool-loop"] }, () =>
+    Effect.gen(function* () {
+      const events = yield* runWeatherToolLoop(
+        weatherToolLoopRequest({
+          id: `cloudflare-workers-ai-responses-${model}`,
+          model: workers,
+          maxTokens: 512,
+          temperature: false,
+        }),
+      )
+      expectWeatherToolLoop(events)
+    }),
+  )
+
+  recorded.effect.with("continues after an assistant reply", { tags: ["text", "multi-turn"] }, () =>
+    Effect.gen(function* () {
+      const first = ai.request({
         model: workers,
-        system: "Use the get_weather tool.",
-        prompt: "What is the weather in Paris?",
-        tools: [weatherTool],
+        prompt: "Remember the word maple. Reply exactly: OK",
         generation: { maxTokens: 256 },
-      }),
-    )
-    expect(response.toolCalls).toMatchObject([{ name: "get_weather", input: { city: "Paris" } }])
-    expect(response.finishReason.normalized).toBe("tool-calls")
-  }),
-)
+      })
+      const reply = yield* LLMClient.generate(first)
+      const response = yield* LLMClient.generate(
+        LLMRequest.update(first, {
+          messages: [
+            ...first.messages,
+            reply.message,
+            Message.user("Which word did I ask you to remember? Reply with the word only."),
+          ],
+        }),
+      )
+      expect(response.text.toLowerCase()).toContain("maple")
+    }),
+  )
+}

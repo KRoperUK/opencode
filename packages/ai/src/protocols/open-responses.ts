@@ -1,8 +1,7 @@
 import { Effect, Option, Schema, Stream } from "effect"
 import type { Content } from "@opencode/schema/tool"
 import { Framing } from "../route/framing.js"
-import { HttpTransport, type Transport } from "../route/transport/index.js"
-import type { HttpPrepared } from "../route/transport/http.js"
+import { HttpTransport } from "../route/transport/index.js"
 import { Protocol } from "../route/protocol.js"
 import {
   AIError,
@@ -1573,29 +1572,17 @@ export const protocol = Protocol.make({
 
 export const httpTransport = HttpTransport.sseJson.with<OpenResponsesBody>()
 
-const documentHttpTransport = HttpTransport.httpJson<OpenResponsesBody, string>({
-  framing: {
-    id: "open-responses-document",
-    frame: (bytes) =>
-      Framing.document.frame(bytes).pipe(
-        Stream.mapEffect((document) => ProviderShared.parseJson(ADAPTER, document, `Invalid ${NAME} response`)),
-        Stream.flatMap((response) => Stream.fromIterable(documentEvents(response).map(ProviderShared.encodeJson))),
-      ),
-  },
-})
-
 /**
- * For hosts whose Responses endpoint only returns the complete Response object: sends
- * `stream: false` and replays the Response as the item and terminal events a stream ends with.
+ * For hosts whose Responses endpoint only returns the complete Response object (`stream: false`):
+ * replays the Response as the item and terminal events a stream ends with.
  */
-export const documentTransport: Transport<OpenResponsesBody, HttpPrepared<string>, string> = {
-  ...documentHttpTransport,
-  id: "http-json/open-responses-document",
-  prepare: (input) =>
-    documentHttpTransport.prepare({
-      ...input,
-      encodeBody: (body) => ProviderShared.encodeJson({ ...body, stream: false }),
-    }),
+export const documentFraming: Framing.Definition<string> = {
+  id: "open-responses-document",
+  frame: (bytes) =>
+    Framing.document.frame(bytes).pipe(
+      Stream.mapEffect((document) => ProviderShared.parseJson(ADAPTER, document, `Invalid ${NAME} response`)),
+      Stream.flatMap((response) => Stream.fromIterable(documentEvents(response).map(ProviderShared.encodeJson))),
+    ),
 }
 
 const documentEvents = (response: unknown) => {

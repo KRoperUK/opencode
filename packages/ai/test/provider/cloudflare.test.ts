@@ -1,13 +1,14 @@
 import { describe, expect } from "bun:test"
 import { ConfigProvider, Effect, Schema } from "effect"
 import { HttpClientRequest } from "effect/http"
-import { ai, LLMEvent } from "../../src/effect.js"
+import { ai, LLMEvent, LLMRequest, Message, ReasoningPart, ToolCallPart } from "../../src/effect.js"
 import { CloudflareAIGateway } from "../../src/providers/cloudflare-ai-gateway.js"
 import { CloudflareWorkersAI } from "../../src/providers/cloudflare-workers-ai.js"
 import { compileRequest } from "../../src/route/client.js"
 import { it } from "../lib/effect.js"
 import { dynamicResponse } from "../lib/http.js"
 import { sseEvents } from "../lib/sse.js"
+import { weatherTool } from "../recorded-scenarios.js"
 
 const Json = Schema.fromJsonString(Schema.Unknown)
 const decodeJson = Schema.decodeUnknownSync(Json)
@@ -327,6 +328,70 @@ describe("Cloudflare", () => {
       )
     }),
   )
+  it.effect("replays Workers AI Responses history in the shape of its output items", () =>
+    Effect.gen(function* () {
+      const model = CloudflareWorkersAI.configure({ accountId: "test-account", apiKey: "test-token" }).responses(
+        "@cf/openai/gpt-oss-120b",
+      )
+      const metadata = (itemId: string) => ({ "cloudflare-workers-ai": { itemId } })
+      const request = ai.request({
+        model,
+        tools: [weatherTool],
+        messages: [
+          Message.user("What is the weather in Paris?"),
+          Message.assistant([
+            ReasoningPart.make({ type: "reasoning", text: "Call the tool.", providerMetadata: metadata("rs_1") }),
+            ReasoningPart.make({ type: "reasoning", text: "No item id." }),
+            ToolCallPart.make({ id: "call_1", name: "get_weather", input: { city: "Paris" } }),
+          ]),
+          Message.tool({
+            id: "call_1",
+            name: "get_weather",
+            result: { type: "content", value: [{ type: "text", text: "sunny" }] },
+          }),
+          Message.assistant("Paris is sunny."),
+        ],
+      })
+      const compiled = yield* compileRequest(request)
+      expect(compiled.body).toMatchObject({
+        stream: false,
+        store: false,
+        tools: [
+          {
+            type: "function",
+            name: "get_weather",
+            function: {
+              name: "get_weather",
+              description: weatherTool.description,
+              parameters: weatherTool.inputSchema,
+            },
+          },
+        ],
+        input: [
+          { type: "message", role: "user" },
+          { type: "reasoning", id: "rs_1", content: [{ type: "reasoning_text", text: "Call the tool." }] },
+          { type: "function_call", call_id: "call_1", status: null },
+          { type: "function_call_output", call_id: "call_1", output: "sunny" },
+          {
+            type: "message",
+            role: "assistant",
+            id: "msg_4",
+            status: "completed",
+            content: [{ type: "output_text", text: "Paris is sunny.", annotations: [] }],
+          },
+        ],
+      })
+      expect(compiled.body).not.toHaveProperty("include")
+
+      const none = yield* compileRequest(LLMRequest.update(request, { toolChoice: { type: "none" } }))
+      expect(none.body).toMatchObject({ tools: undefined, tool_choice: undefined })
+      const forced = yield* compileRequest(LLMRequest.update(request, { toolChoice: { type: "required" } })).pipe(
+        Effect.flip,
+      )
+      expect(forced.message).toContain("only automatic tool choice")
+    }),
+  )
+
   it.effect("replays complete Workers AI Responses documents as stream events", () =>
     Effect.gen(function* () {
       const model = CloudflareWorkersAI.configure({ accountId: "test-account", apiKey: "test-token" }).responses(

@@ -132,12 +132,12 @@ describe("provider package entrypoints", () => {
         }),
         "cloudflare-workers-ai-responses",
         "https://api.cloudflare.com/client/v4/accounts/account/ai/v1",
-        encrypted,
+        { store: false },
       ],
     ] as const
     for (const [model, route, baseURL, defaults] of selected) {
       expect(model.route.id).toBe(route)
-      expect(model.route.protocol).toBe("open-responses")
+      expect(model.route.protocol).toBe(route === "cloudflare-workers-ai-responses" ? route : "open-responses")
       expect(model.route.endpoint).toMatchObject({ baseURL, path: "/responses" })
       expect(model.route.defaults.headers).toEqual(settings.headers)
       expect(model.route.defaults.http?.body).toEqual(settings.body)
