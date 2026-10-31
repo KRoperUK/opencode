@@ -26,11 +26,8 @@ describe("xAI Images", () => {
           response_format: "b64_json",
           future_option: true,
         },
-        http: {
-          body: { future_option: "http" },
-          headers: { "x-request": "yes" },
-          query: { trace: "1" },
-        },
+        headers: { "x-request": "yes" },
+        http: { body: { future_option: "http" }, query: { trace: "1" } },
       })
 
       expect(response.images).toHaveLength(2)

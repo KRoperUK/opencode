@@ -13,9 +13,15 @@ import {
   HttpOptions,
   InvalidRequestError,
   ProviderID,
+  TransportError,
   UnsupportedOperationError,
   mergeHttpOptions,
   mergeProviderOptions,
+  requestHttpOptions,
+  transportFields,
+  type BaseRequest,
+  type HttpContext,
+  type HttpTimeout,
   type ProviderOptions,
 } from "../schema/index.js"
 import { encodeJson } from "../utils/json.js"
@@ -24,15 +30,17 @@ import { sanitizeSurrogates } from "../utils/sanitize.js"
 export type Execute = Interface["execute"]
 
 /** The minimum a media request must carry for the route to build a transport request. */
-export interface MediaRequest {
-  readonly model: {
-    readonly id: string
-    readonly provider: ProviderID
-    readonly http?: HttpOptions
-    readonly providerOptions?: ProviderOptions
-  }
-  readonly providerOptions?: ProviderOptions
+export type MediaRequest = BaseRequest<{
+  readonly id: string
+  readonly provider: ProviderID
   readonly http?: HttpOptions
+  readonly providerOptions?: ProviderOptions
+}>
+
+/** What every HTTP exchange of one generation shares: merged `http` overlays and the caller's `fetch`. */
+interface Exchange {
+  readonly http?: HttpOptions
+  readonly fetch?: typeof globalThis.fetch
 }
 
 /** Deployment inputs every media model factory accepts; provider facades fill these from `configure(...)`. */
@@ -187,7 +195,7 @@ export const queued = <Request extends MediaRequest, Response, Token>(
   // A protocol producing a token its own codec rejects is a programmer defect, not a provider error.
   const encodeToken = Schema.encodeSync(protocol.token)
 
-  const generationRoute = (token: Token, http: HttpOptions | undefined, execute: Execute) => {
+  const generationRoute = (token: Token, exchange: Exchange, execute: Execute) => {
     // Only the GET exchange retries: a decoded terminal failure (`output.ended`) can be a `ProviderInternal` too, and
     // re-reading it would spin until the caller's deadline.
     const poll = <A>(operation: {
@@ -197,7 +205,7 @@ export const queued = <Request extends MediaRequest, Response, Token>(
         context: MediaProtocol.PollContext<Token>,
       ) => Effect.Effect<A, AIError>
     }) =>
-      transport.call("GET", operation.path(token), http, execute).pipe(
+      transport.call("GET", operation.path(token), exchange, execute).pipe(
         Effect.retry({ schedule: READ_RETRY, while: isRetryable }),
         Effect.flatMap((sent) => operation.decode(sent.response, { token, auth: sent.auth })),
       )
@@ -206,7 +214,7 @@ export const queued = <Request extends MediaRequest, Response, Token>(
     const send =
       cancel === undefined
         ? undefined
-        : transport.call(cancel.method, cancel.path(token), http, execute).pipe(Effect.asVoid)
+        : transport.call(cancel.method, cancel.path(token), exchange, execute).pipe(Effect.asVoid)
     return {
       status,
       result: poll(protocol.result),
@@ -224,7 +232,7 @@ export const queued = <Request extends MediaRequest, Response, Token>(
       execute,
     )
     const started = yield* protocol.start.decode(submitted.response, submitted.context)
-    const route = generationRoute(started.token, submitted.context.request.http, execute)
+    const route = generationRoute(started.token, submitted.exchange, execute)
     return new Generation(route, encodeToken(started.token), started.snapshot)
   })
 
@@ -244,7 +252,7 @@ export const queued = <Request extends MediaRequest, Response, Token>(
           }),
       ),
     )
-    const route = generationRoute(token, transport.http(model), execute)
+    const route = generationRoute(token, { http: transport.http(model) }, execute)
     return new Generation(route, encodeToken(token), yield* route.status)
   })
 
@@ -269,7 +277,7 @@ export const stream = <Request extends MediaRequest, Event, Response, Frame, Sta
         return Stream.suspend(() => {
           // Parser state is local to one response, exactly like `Route.make`'s LLM stream loop.
           let state = protocol.initial()
-          return protocol.frames(RequestExecutor.responseStream(submitted.response), submitted.context).pipe(
+          return protocol.frames(withChunkTimeout(submitted, http), submitted.context).pipe(
             Stream.mapEffect((frame) =>
               protocol.step(state, frame).pipe(
                 Effect.map(([next, output]) => {
@@ -328,6 +336,7 @@ const makeTransport = <Request extends MediaRequest>(
       readonly request: AuthInput["request"]
       readonly body?: MediaProtocol.Body
     },
+    exchange: Exchange,
     execute: Execute,
   ) {
     const encoded = encode(call.body, call.headers)
@@ -341,7 +350,8 @@ const makeTransport = <Request extends MediaRequest>(
     })
     const response = yield* execute(
       encoded.apply(HttpClientRequest.make(call.method)(url).pipe(HttpClientRequest.setHeaders(headers))),
-    )
+      RequestExecutor.withFetch(exchange.fetch),
+    ).pipe(withHeaderTimeout(exchange.http, url))
     return {
       response,
       auth: Object.fromEntries(Object.entries(headers).filter(([key, value]) => encoded.headers[key] !== value)),
@@ -361,21 +371,23 @@ const makeTransport = <Request extends MediaRequest>(
       execute: Execute,
     ) {
       yield* rejectUnsupported(input.protocol.id, input.protocol.provider, request, protocol.unsupported)
-      const http = mergeHttpOptions(routeHttp, request.model.http, request.http)
+      const http = mergeHttpOptions(routeHttp, request.model.http, requestHttpOptions(request))
+      const exchange = { http, fetch: request.fetch }
       const providerOptions = mergeProviderOptions(request.model.providerOptions, request.providerOptions)
       const headers = Headers.fromInput(http?.headers)
       const prepared =
         protocol.prepare === undefined
           ? request
           : yield* protocol.prepare(request, (path, body) =>
-              send({ method: "POST", url: baseURL(path), headers, request, body }, execute).pipe(
+              send({ method: "POST", url: baseURL(path), headers, request, body }, exchange, execute).pipe(
                 Effect.map((sent) => sent.response),
               ),
             )
       // Sanitize after merging so model-level overlays are covered; the model value is restored, not sanitized.
       const resolved: Request = {
-        ...sanitizeSurrogates({ ...prepared, http, providerOptions }),
+        ...sanitizeSurrogates({ ...prepared, ...transportFields(http), providerOptions }),
         model: request.model,
+        fetch: request.fetch,
       }
       const body = yield* protocol.from(resolved)
       const url = withQuery(
@@ -385,17 +397,62 @@ const makeTransport = <Request extends MediaRequest>(
         ),
         http?.query,
       )
-      const sent = yield* send({ method: "POST", url, headers, request: resolved, body }, execute)
-      return { response: sent.response, context: { request: resolved, body } }
+      const sent = yield* send({ method: "POST", url, headers, request: resolved, body }, exchange, execute)
+      return { response: sent.response, context: { request: resolved, body }, exchange }
     }),
     /** Bodiless follow-up call (status, result, cancel) with the same auth and headers as `submit`. */
-    call: (method: AuthInput["method"], path: string, http: HttpOptions | undefined, execute: Execute) => {
+    call: (method: AuthInput["method"], path: string, exchange: Exchange, execute: Execute) => {
       // Provider-issued absolute URLs are used as-is; everything else resolves against the base.
-      const url = withQuery(/^https?:\/\//.test(path) ? new URL(path) : baseURL(path), http?.query)
+      const url = withQuery(/^https?:\/\//.test(path) ? new URL(path) : baseURL(path), exchange.http?.query)
       for (const [key, value] of Object.entries(input.endpoint.query ?? {})) url.searchParams.set(key, value)
-      return send({ method, url, headers: Headers.fromInput(http?.headers), request: { http } }, execute)
+      return send(
+        { method, url, headers: Headers.fromInput(exchange.http?.headers), request: { http: exchange.http } },
+        exchange,
+        execute,
+      )
     },
   }
+}
+
+// Media routes apply only the timeouts a caller or deployment sets; the text defaults do not apply.
+const explicit = (value: HttpTimeout | undefined) =>
+  value === undefined || value === false ? Duration.infinity : Duration.millis(value)
+
+const timeoutError = (url: string, operation: "request" | "read", message: string, http?: HttpContext) =>
+  new AIError({ reason: new TransportError({ message, transport: "http", operation, code: "Timeout", url, http }) })
+
+/** Bound one exchange by the time to response headers, and by the whole-request budget. */
+const withHeaderTimeout =
+  (http: HttpOptions | undefined, url: string) =>
+  <A, R>(effect: Effect.Effect<A, AIError, R>) => {
+    const duration = Duration.min(explicit(http?.headerTimeout), explicit(http?.timeout))
+    return Duration.isFinite(duration)
+      ? effect.pipe(
+          Effect.timeoutOrElse({
+            duration,
+            orElse: () => Effect.fail(timeoutError(url, "request", "Timed out waiting for response headers")),
+          }),
+        )
+      : effect
+  }
+
+const withChunkTimeout = (
+  submitted: { readonly response: HttpClientResponse.HttpClientResponse; readonly exchange: Exchange },
+  http: HttpContext,
+) => {
+  const bytes = RequestExecutor.responseStream(submitted.response)
+  const duration = explicit(submitted.exchange.http?.chunkTimeout)
+  return Duration.isFinite(duration)
+    ? bytes.pipe(
+        Stream.timeoutOrElse({
+          duration,
+          orElse: () =>
+            Stream.fail(
+              timeoutError(submitted.response.request.url, "read", "Timed out waiting for response data", http),
+            ),
+        }),
+      )
+    : bytes
 }
 
 const withQuery = (url: URL, query: MediaProtocol.Query | undefined) => {

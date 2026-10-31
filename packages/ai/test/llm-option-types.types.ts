@@ -115,3 +115,12 @@ void AI.ai.stream(AI.ai.request({ model, prompt: "Hello" }))
 void AI.ai.generate({ model, prompt: "Hello", providerOptions: { mode: "slow" } })
 // @ts-expect-error Promise stream input keeps the selected model's provider option types.
 void AI.ai.stream({ model, prompt: "Hello", providerOptions: { mode: "slow" } })
+
+// Transport fields sit at the top level; `http` keeps only the rare wire overrides.
+ai.request({ model, prompt: "Hello", headers: { "x-trace": "1" }, timeout: 30_000, fetch: globalThis.fetch })
+ai.request({ model, prompt: "Hello", timeout: { total: false, headers: 1_000, chunk: 2_000 } })
+ai.request({ model, prompt: "Hello", http: { query: { trace: "1" }, body: { extra: true }, encoding: "gzip" } })
+// @ts-expect-error Headers moved out of `http`.
+ai.request({ model, prompt: "Hello", http: { headers: { "x-trace": "1" } } })
+// @ts-expect-error Timeouts moved out of `http`.
+ai.request({ model, prompt: "Hello", http: { headerTimeout: 1_000 } })

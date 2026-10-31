@@ -13,7 +13,6 @@ import {
 } from "./route/client.js"
 import {
   GenerationOptions,
-  HttpOptions,
   InvalidProviderOutputError,
   AIError,
   LLMEvent,
@@ -21,6 +20,7 @@ import {
   Message,
   LanguageModel,
   SystemPart,
+  type BaseRequest,
   type CachePolicy,
   type CompactionCheckpointResponse,
   type CompactionResponse,
@@ -37,9 +37,9 @@ import { tool, type ExecutableTool, type Tool, type ToolSchema } from "./tool.js
 import { ToolRuntime } from "./tool-runtime.js"
 
 /** Input accepted by `ai.request`, `ai.generate`, `ai.stream` and `ai.compact`. A `TextRequest` is also a valid input. */
-export interface TextRequestInput<Model extends LanguageModel = LanguageModel> {
+export interface TextRequestInput<Model extends LanguageModel = LanguageModel>
+  extends BaseRequest<Model, NoInfer<LanguageModelProviderOptions<Model>>> {
   readonly id?: string
-  readonly model: Model
   readonly system?: string | SystemPart | ReadonlyArray<SystemPart>
   /** Appended as a user message after `messages`. */
   readonly prompt?: string | ContentPart | ReadonlyArray<ContentPart>
@@ -48,8 +48,6 @@ export interface TextRequestInput<Model extends LanguageModel = LanguageModel> {
   readonly tools?: ReadonlyArray<Tool | ToolEntryInput>
   readonly toolChoice?: ToolChoice.Input
   readonly generation?: GenerationOptions.Input
-  readonly providerOptions?: NoInfer<LanguageModelProviderOptions<Model>>
-  readonly http?: HttpOptions.Input
   readonly cache?: CachePolicy
   /** Stable cache affinity for protocols that support provider-managed prompt caching. */
   readonly promptCacheKey?: string
@@ -273,7 +271,10 @@ export const request = <const Model extends LanguageModel>(input: TextRequestInp
   toolChoice: input.toolChoice ? ToolChoice.make(input.toolChoice) : undefined,
   generation: input.generation === undefined ? undefined : GenerationOptions.make(input.generation),
   providerOptions: input.providerOptions,
-  http: HttpOptions.make(input.http),
+  headers: input.headers,
+  fetch: input.fetch,
+  timeout: input.timeout,
+  http: input.http,
   cache: input.cache,
   promptCacheKey: input.promptCacheKey,
   metadata: input.metadata,

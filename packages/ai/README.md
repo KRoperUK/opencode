@@ -1573,9 +1573,10 @@ Request options in order of stability:
 1. **`generation`** — portable knobs (`maxTokens`, `temperature`, `topP`, `topK`, penalties, seed, stop).
 2. **`promptCacheKey`** — stable cache affinity lowered by every protocol that supports it.
 3. **`providerOptions: { ... }`** — flat options inferred from the selected model (OpenAI `store`, Anthropic `thinking`, Gemini `thinkingConfig`, OpenRouter routing).
-4. **`http: { body, headers, query }`** — last-resort serializable overlays merged into the final HTTP request. Reach for this only when a stable typed path doesn't yet exist.
+4. **`headers`, `timeout`, `fetch`** — per-call transport. `headers` merge over the provider's, with the call winning. `timeout` is milliseconds for the whole request, `false`, or `{ total, headers, chunk }` (headers default to 5 minutes and chunks to 15 for text). `fetch` sends this call through your own `fetch` instead of the client's HTTP executor.
+5. **`http: { body, query, encoding }`** — last-resort serializable overlays merged into the final HTTP request. Reach for this only when a stable typed path doesn't yet exist.
 
-Route/provider defaults are overridden by request-level values for each axis.
+Every modality's request (text, image, decision and the experimental ones) accepts the same `model`, `providerOptions`, `headers`, `fetch`, `timeout` and `http` fields. Route/provider defaults are overridden by request-level values for each axis.
 
 The selected model supplies the provider-specific option type, so per-request overrides stay flat while the canonical runtime request remains provider-neutral:
 

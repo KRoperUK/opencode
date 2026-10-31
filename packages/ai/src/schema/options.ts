@@ -91,6 +91,89 @@ export namespace HttpOptions {
   }
 }
 
+/** Per-phase time limits in milliseconds, each `false` to disable it. */
+export interface TimeoutConfig {
+  /** The whole request, from send until the response completes. Unbounded when unset. */
+  readonly total?: HttpTimeout
+  /** Until response headers arrive. Text requests default to 5 minutes. */
+  readonly headers?: HttpTimeout
+  /** Between streamed response chunks once headers have arrived. Text requests default to 15 minutes. */
+  readonly chunk?: HttpTimeout
+}
+
+/** Milliseconds for the whole request, `false` to disable it, or per-phase limits. */
+export type RequestTimeout = HttpTimeout | TimeoutConfig
+
+/** Rare wire-level overrides. */
+export interface WireHttpOptions {
+  readonly query?: Record<string, string>
+  /** Deep-merged over the provider-native JSON body. */
+  readonly body?: Record<string, unknown>
+  /** Compression for JSON request bodies. Only set it for endpoints known to decode it. */
+  readonly encoding?: RequestEncoding
+}
+
+/** The fields every request shares, whatever its modality. */
+export interface BaseRequest<Model, Options = ProviderOptions> {
+  readonly model: Model
+  readonly providerOptions?: Options
+  /** Merged over the provider's headers; these win. */
+  readonly headers?: Record<string, string>
+  /** Sends this call through `fetch` instead of the client's HTTP executor. */
+  readonly fetch?: typeof globalThis.fetch
+  readonly timeout?: RequestTimeout
+  readonly http?: WireHttpOptions
+}
+
+const TimeoutConfigSchema = Schema.Struct({
+  total: Schema.optional(HttpTimeout),
+  headers: Schema.optional(HttpTimeout),
+  chunk: Schema.optional(HttpTimeout),
+})
+
+/** Validates the transport fields of a `BaseRequest`. */
+export const BaseRequestTransport = Schema.Struct({
+  headers: Schema.optional(Schema.Record(Schema.String, Schema.String)),
+  timeout: Schema.optional(Schema.Union([HttpTimeout, TimeoutConfigSchema])),
+  http: Schema.optional(
+    Schema.Struct({
+      query: Schema.optional(Schema.Record(Schema.String, Schema.String)),
+      body: Schema.optional(JsonSchema),
+      encoding: Schema.optional(RequestEncoding),
+    }),
+  ),
+})
+
+export const timeoutConfig = (timeout: RequestTimeout | undefined): TimeoutConfig =>
+  timeout === undefined ? {} : typeof timeout === "object" ? timeout : { total: timeout }
+
+/** A request's transport fields as `HttpOptions`, so they merge over deployment defaults. */
+export const requestHttpOptions = (request: Omit<BaseRequest<unknown>, "model">): HttpOptions | undefined => {
+  const timeout = timeoutConfig(request.timeout)
+  return mergeHttpOptions(
+    new HttpOptions({
+      headers: request.headers,
+      query: request.http?.query,
+      body: request.http?.body,
+      encoding: request.http?.encoding,
+      timeout: timeout.total,
+      headerTimeout: timeout.headers,
+      chunkTimeout: timeout.chunk,
+    }),
+  )
+}
+
+/** Merged `HttpOptions` back as `BaseRequest` transport fields. */
+export const transportFields = (http: HttpOptions | undefined) => {
+  const timeout = { total: http?.timeout, headers: http?.headerTimeout, chunk: http?.chunkTimeout }
+  const wire = { query: http?.query, body: http?.body, encoding: http?.encoding }
+  return {
+    headers: http?.headers,
+    timeout: Object.values(timeout).some((value) => value !== undefined) ? timeout : undefined,
+    http: Object.values(wire).some((value) => value !== undefined) ? wire : undefined,
+  }
+}
+
 export const mergeHttpOptions = (...items: ReadonlyArray<HttpOptions | undefined>): HttpOptions | undefined => {
   const body = mergeJsonRecords(...items.map((item) => item?.body))
   const headers = mergeStringRecords(...items.map((item) => item?.headers))

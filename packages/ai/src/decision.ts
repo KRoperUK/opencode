@@ -4,11 +4,13 @@ import { Media } from "./media.js"
 import { tryRequest } from "./media-model.js"
 import {
   AIError,
+  BaseRequestTransport,
   HttpOptions,
   ModelID,
   ProviderID,
   ProviderMetadata,
   ProviderOptions,
+  type BaseRequest,
   type OpenString,
 } from "./schema/index.js"
 
@@ -243,31 +245,25 @@ const DecisionRequestSchema = Schema.Struct({
   input: Schema.Array(DecisionPart),
   questions: DecisionQuestionList,
   providerOptions: Schema.optional(ProviderOptions),
-  http: Schema.optional(HttpOptions),
+  ...BaseRequestTransport.fields,
 })
 
 /** A normalized decision request, the plain object `ai.decision.request(...)` returns. */
 export interface DecisionRequest<
   Model extends DecisionModel = DecisionModel,
   Questions extends DecisionQuestions = DecisionQuestions,
-> {
-  readonly model: Model
+> extends BaseRequest<Model, DecisionModelOptions<Model>> {
   readonly input: ReadonlyArray<DecisionPart>
   readonly questions: Questions
-  readonly providerOptions?: DecisionModelOptions<Model>
-  readonly http?: HttpOptions
 }
 
 /** Input accepted by `ai.decision.request` and `generate`. A `DecisionRequest` is also a valid input. */
 export interface DecisionRequestInput<
   Model extends DecisionModel = DecisionModel,
   Questions extends DecisionQuestions = DecisionQuestions,
-> {
-  readonly model: Model
+> extends BaseRequest<Model, NoInfer<DecisionModelOptions<Model>>> {
   readonly input: DecisionInput
   readonly questions: Questions
-  readonly providerOptions?: NoInfer<DecisionModelOptions<Model>>
-  readonly http?: HttpOptions.Input
 }
 
 /** What decision hosts report; their raw usage stays in the response's `providerMetadata`. */
@@ -299,7 +295,6 @@ export const request = <const Model extends DecisionModel, const Questions exten
 ): DecisionRequest<Model, Questions> => ({
   ...input,
   input: Array.isArray(input.input) ? input.input : [{ type: "json", value: input.input }],
-  http: HttpOptions.make(input.http),
 })
 
 const validate = Schema.decodeUnknownSync(DecisionRequestSchema)

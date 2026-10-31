@@ -3,7 +3,15 @@ import { ProgressEvent, QueuedEvent } from "./generation.js"
 import { Media } from "./media.js"
 import { MediaModel, composeRoute, tryRequest } from "./media-model.js"
 import { MediaRoute } from "./route/media.js"
-import { AIError, HttpOptions, MediaUsage, ProviderMetadata, ProviderOptions, type OpenString } from "./schema/index.js"
+import {
+  AIError,
+  BaseRequestTransport,
+  type BaseRequest,
+  MediaUsage,
+  ProviderMetadata,
+  ProviderOptions,
+  type OpenString,
+} from "./schema/index.js"
 import { SpeechClient, Service } from "./speech-client.js"
 
 // ---------------------------------------------------------------------------
@@ -85,28 +93,26 @@ const SpeechRequestSchema = Schema.Struct({
   instructions: Schema.optional(Schema.String),
   timestamps: Schema.optional(Schema.Boolean),
   providerOptions: Schema.optional(ProviderOptions),
-  http: Schema.optional(HttpOptions),
+  ...BaseRequestTransport.fields,
 })
 
 /** A normalized speech request, the plain object `Speech.request(...)` returns. */
 export type SpeechRequest<Model extends SpeechModel = SpeechModel> = Omit<
   typeof SpeechRequestSchema.Type,
-  "model" | "providerOptions" | "format"
-> & {
-  readonly model: Model
-  readonly format?: SpeechFormat
-  readonly providerOptions?: SpeechModelOptions<Model>
-}
+  "model" | "providerOptions" | "headers" | "timeout" | "http" | "format"
+> &
+  BaseRequest<Model, SpeechModelOptions<Model>> & {
+    readonly format?: SpeechFormat
+  }
 
 export type SpeechModelOptions<Model> = Model extends SpeechModel<infer Options> ? Options : never
 
 /** Input accepted by `Speech.request` and the calls; a `SpeechRequest` is also a valid input. */
 export type SpeechRequestInput<Model extends SpeechModel = SpeechModel> = Omit<
   SpeechRequest<Model>,
-  "providerOptions" | "http"
+  "providerOptions"
 > & {
   readonly providerOptions?: NoInfer<SpeechModelOptions<Model>>
-  readonly http?: HttpOptions.Input
 }
 
 // ---------------------------------------------------------------------------
@@ -179,7 +185,6 @@ const collectResponse = (events: ReadonlyArray<SpeechEvent>): Effect.Effect<Spee
 /** Normalize speech request input into a plain `SpeechRequest`. */
 export const request = <const Model extends SpeechModel>(input: SpeechRequestInput<Model>): SpeechRequest<Model> => ({
   ...input,
-  http: HttpOptions.make(input.http),
 })
 
 const validate = Schema.decodeUnknownSync(SpeechRequestSchema)

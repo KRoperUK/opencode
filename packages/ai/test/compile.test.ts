@@ -204,11 +204,8 @@ describe("request option precedence", () => {
             },
           }),
         prompt: "Say hello.",
-        http: {
-          body: { metadata: { request: true }, value: null },
-          headers: { "x-request": "request" },
-          query: { request: "1" },
-        },
+        headers: { "x-request": "request" },
+        http: { body: { metadata: { request: true }, value: null }, query: { request: "1" } },
       }),
     ).pipe(
       Effect.provide(

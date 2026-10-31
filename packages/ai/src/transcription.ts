@@ -3,7 +3,14 @@ import { Generation, ProgressEvent, QueuedEvent, type AwaitOptions } from "./gen
 import { Media } from "./media.js"
 import { MediaModel, composeRoute, tryRequest } from "./media-model.js"
 import { MediaRoute } from "./route/media.js"
-import { AIError, HttpOptions, MediaUsage, ProviderMetadata, ProviderOptions } from "./schema/index.js"
+import {
+  AIError,
+  BaseRequestTransport,
+  type BaseRequest,
+  MediaUsage,
+  ProviderMetadata,
+  ProviderOptions,
+} from "./schema/index.js"
 import { TranscriptionClient, Service } from "./transcription-client.js"
 
 // ---------------------------------------------------------------------------
@@ -81,27 +88,24 @@ const TranscriptionRequestSchema = Schema.Struct({
   diarize: Schema.optional(Schema.Boolean),
   speakers: Schema.optional(Schema.Int),
   providerOptions: Schema.optional(ProviderOptions),
-  http: Schema.optional(HttpOptions),
+  ...BaseRequestTransport.fields,
 })
 
 /** A normalized transcription request, the plain object `Transcription.request(...)` returns. */
 export type TranscriptionRequest<Model extends TranscriptionModel = TranscriptionModel> = Omit<
   typeof TranscriptionRequestSchema.Type,
-  "model" | "providerOptions"
-> & {
-  readonly model: Model
-  readonly providerOptions?: TranscriptionModelOptions<Model>
-}
+  "model" | "providerOptions" | "headers" | "timeout" | "http"
+> &
+  BaseRequest<Model, TranscriptionModelOptions<Model>>
 
 export type TranscriptionModelOptions<Model> = Model extends TranscriptionModel<infer Options> ? Options : never
 
 /** Input accepted by `Transcription.request` and the calls; a `TranscriptionRequest` is also a valid input. */
 export type TranscriptionRequestInput<Model extends TranscriptionModel = TranscriptionModel> = Omit<
   TranscriptionRequest<Model>,
-  "providerOptions" | "http"
+  "providerOptions"
 > & {
   readonly providerOptions?: NoInfer<TranscriptionModelOptions<Model>>
-  readonly http?: HttpOptions.Input
 }
 
 // ---------------------------------------------------------------------------
@@ -191,7 +195,6 @@ export const request = <const Model extends TranscriptionModel>(
   input: TranscriptionRequestInput<Model>,
 ): TranscriptionRequest<Model> => ({
   ...input,
-  http: HttpOptions.make(input.http),
 })
 
 const validate = Schema.decodeUnknownSync(TranscriptionRequestSchema)
