@@ -3,7 +3,7 @@ import { Route } from "../route/client.js"
 import { Endpoint } from "../route/endpoint.js"
 import { Framing } from "../route/framing.js"
 import { Protocol } from "../route/protocol.js"
-import { LLMEvent, Usage, type FinishReasonDetails, type LLMRequest } from "../schema/index.js"
+import { LLMEvent, Usage, type FinishReasonDetails, type TextRequest } from "../schema/index.js"
 import { JsonObject, ProviderShared } from "./shared.js"
 import { Lifecycle } from "./utils/lifecycle.js"
 import { ToolStream } from "./utils/tool-stream.js"
@@ -143,7 +143,7 @@ type State = {
 
 const TOOL_CHOICE = { auto: undefined, none: "NONE", required: "REQUIRED", tool: "REQUIRED" } as const
 
-const fromRequest = Effect.fn("CohereChat.fromRequest")(function* (request: LLMRequest) {
+const fromRequest = Effect.fn("CohereChat.fromRequest")(function* (request: TextRequest) {
   const options = yield* ProviderShared.validateWith(Schema.decodeUnknownEffect(Options))(request.providerOptions ?? {})
   const flattened = ProviderShared.flattenToolRequest(request)
   const messages: (typeof Message.Type)[] = request.system.length

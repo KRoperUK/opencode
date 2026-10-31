@@ -1,6 +1,6 @@
 import { Effect, Schema } from "effect"
 import { Protocol } from "../route/protocol.js"
-import type { LanguageModelCompatibility, LLMRequest } from "../schema/index.js"
+import type { LanguageModelCompatibility, TextRequest } from "../schema/index.js"
 import { OpenAIChat } from "./openai-chat.js"
 import { ProviderShared } from "./shared.js"
 import { OpenResponsesOptions } from "./utils/open-responses-options.js"
@@ -18,9 +18,7 @@ const Options = Schema.Struct({
   ),
   toolStream: Schema.optional(Schema.Boolean),
   doSample: Schema.optional(Schema.Boolean),
-  responseFormat: Schema.optional(
-    Schema.Struct({ type: ProviderShared.knownString<"text" | "json_object">() }),
-  ),
+  responseFormat: Schema.optional(Schema.Struct({ type: ProviderShared.knownString<"text" | "json_object">() })),
   requestID: Schema.optional(Schema.String),
   userID: Schema.optional(Schema.String),
 })
@@ -41,7 +39,7 @@ const supportsToolStreaming = (modelID: string) => {
   return match !== null && (Number(match[1]) > 4 || (Number(match[1]) === 4 && Number(match[2] ?? 0) >= 6))
 }
 
-const fromRequest = Effect.fn("ZAIChat.fromRequest")(function* (request: LLMRequest) {
+const fromRequest = Effect.fn("ZAIChat.fromRequest")(function* (request: TextRequest) {
   const options = yield* ProviderShared.validateWith(Schema.decodeUnknownEffect(Options))(request.providerOptions ?? {})
   const body = yield* OpenAIChat.protocol.body.from(request)
   return {

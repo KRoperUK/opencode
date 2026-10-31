@@ -16,7 +16,7 @@ import {
   Usage,
   type FinishReasonDetails,
   type CacheHint,
-  type LLMRequest,
+  type TextRequest,
   type MediaPart,
   type ReasoningPart,
   type ToolCallPart,
@@ -41,7 +41,7 @@ export const PATH = "/chat/completions"
 // Request Body Schema
 // =============================================================================
 // The body schema is the provider-native JSON body. `fromRequest` below builds
-// this shape from the common `LLMRequest`, then `Route.make` validates and
+// this shape from the common `TextRequest`, then `Route.make` validates and
 // JSON-encodes it before transport.
 const OpenAIChatCacheControl = Schema.Struct({
   type: Schema.Literal("ephemeral"),
@@ -123,7 +123,11 @@ const OpenRouterDetailFields = {
 }
 const ReasoningDetail = Schema.Union([
   Schema.StructWithRest(
-    Schema.Struct({ type: Schema.Literal("reasoning.text"), text: Schema.optional(Schema.String), ...OpenRouterDetailFields }),
+    Schema.Struct({
+      type: Schema.Literal("reasoning.text"),
+      text: Schema.optional(Schema.String),
+      ...OpenRouterDetailFields,
+    }),
     [Schema.Record(Schema.String, Schema.Unknown)],
   ),
   Schema.StructWithRest(
@@ -337,7 +341,7 @@ export const OpenAIChatEvent = Schema.StructWithRest(
 export type OpenAIChatEvent = Schema.Schema.Type<typeof OpenAIChatEvent>
 const DONE = "[DONE]" as const
 const OpenAIChatStreamEvent = Schema.Union([Schema.Literal(DONE), Protocol.jsonEvent(OpenAIChatEvent)])
-type OpenAIChatRequestMessage = LLMRequest["messages"][number]
+type OpenAIChatRequestMessage = TextRequest["messages"][number]
 
 interface PendingToolDelta {
   readonly id?: string
@@ -373,12 +377,12 @@ export interface ParserState {
 // =============================================================================
 // Lowering is the only place that knows how common LLM messages map onto the
 // OpenAI Chat wire format. Keep provider quirks here instead of leaking native
-// fields into `LLMRequest`.
+// fields into `TextRequest`.
 interface LoweringOptions {
   readonly cacheControl?: (cache: CacheHint | undefined) => OpenAIChatCacheControl | undefined
   readonly toolCallID?: (id: string) => string
   /** Project provider-specific fields from the exact source, even when other messages are dropped during lowering. */
-  readonly assistant?: (source: LLMRequest["messages"][number], message: OpenAIChatMessage) => OpenAIChatMessage
+  readonly assistant?: (source: TextRequest["messages"][number], message: OpenAIChatMessage) => OpenAIChatMessage
 }
 
 type MessageLoweringOptions = LoweringOptions & {
@@ -417,7 +421,7 @@ const lowerTool = (
 }
 
 const lowerToolChoice = (
-  toolChoice: NonNullable<LLMRequest["toolChoice"]>,
+  toolChoice: NonNullable<TextRequest["toolChoice"]>,
   custom: ReadonlyMap<string, OpenAIFreeform.Custom>,
 ) =>
   ProviderShared.matchToolChoice("OpenAI Chat", toolChoice, {
@@ -497,10 +501,7 @@ const lowerReasoningDetail = (detail: ReasoningDetail) => {
 
 const isKimiDetail = (detail: { readonly type: string }) => detail.type === "summary" || detail.type === "encrypted"
 
-const lowerUserMessage = Effect.fnUntraced(function* (
-  message: OpenAIChatRequestMessage,
-  options: LoweringOptions,
-) {
+const lowerUserMessage = Effect.fnUntraced(function* (message: OpenAIChatRequestMessage, options: LoweringOptions) {
   const content: OpenAIChatUserContent[] = []
   for (const part of message.content) {
     if (part.type === "text") {
@@ -586,10 +587,7 @@ const lowerAssistantMessage = Effect.fnUntraced(function* (
   return { ...result, [field]: reasoningText }
 })
 
-const lowerToolMessages = Effect.fnUntraced(function* (
-  message: OpenAIChatRequestMessage,
-  options: LoweringOptions,
-) {
+const lowerToolMessages = Effect.fnUntraced(function* (message: OpenAIChatRequestMessage, options: LoweringOptions) {
   const messages: OpenAIChatMessage[] = []
   const attachments: OpenAIChatUserContent[] = []
   for (const part of message.content) {
@@ -638,7 +636,7 @@ const lowerMessage = Effect.fnUntraced(function* (
 })
 
 const lowerMessages = Effect.fnUntraced(function* (
-  request: LLMRequest,
+  request: TextRequest,
   options: Omit<MessageLoweringOptions, "providerMetadataKey">,
 ) {
   const system: OpenAIChatMessage[] =
@@ -700,10 +698,7 @@ const lowerMessages = Effect.fnUntraced(function* (
       if (pendingAttachments.length > 0) {
         messages.push({
           role: "user",
-          content: [
-            ...pendingAttachments.splice(0),
-            { type: "text", text: part.text, cache_control: cacheControl },
-          ],
+          content: [...pendingAttachments.splice(0), { type: "text", text: part.text, cache_control: cacheControl }],
         })
         continue
       }
@@ -721,10 +716,7 @@ const lowerMessages = Effect.fnUntraced(function* (
       else if (previous?.role === "user" && Array.isArray(previous.content))
         messages[messages.length - 1] = {
           role: "user",
-          content: [
-            ...previous.content,
-            { type: "text", text: part.text, cache_control: cacheControl },
-          ],
+          content: [...previous.content, { type: "text", text: part.text, cache_control: cacheControl }],
         }
       else
         messages.push(
@@ -758,7 +750,7 @@ const lowerMessages = Effect.fnUntraced(function* (
 // Anthropic via LiteLLM and Amazon Bedrock require `tools` to be present
 // whenever the conversation history contains tool calls/results. Send an
 // explicit empty array when we have history but no active tools.
-const hasToolHistory = (messages: ReadonlyArray<LLMRequest["messages"][number]>) => {
+const hasToolHistory = (messages: ReadonlyArray<TextRequest["messages"][number]>) => {
   for (const message of messages) {
     if (message.role === "tool") return true
     if (message.role === "assistant" && message.content.some((part) => part.type === "tool-call")) return true
@@ -847,7 +839,7 @@ const detectZaiToolStream = (provider: string, baseURL: string | undefined, mode
   return true
 }
 
-const lowerOptions = (request: LLMRequest, supportsStore: boolean, hasActiveTools: boolean) => {
+const lowerOptions = (request: TextRequest, supportsStore: boolean, hasActiveTools: boolean) => {
   const options = OpenResponsesOptions.resolve(request)
   // OpenAI rejects `parallel_tool_calls` unless tools are present.
   const parallelToolCalls = hasActiveTools ? resolveParallelToolCalls(request, options) : undefined
@@ -871,7 +863,7 @@ const lowerOptions = (request: LLMRequest, supportsStore: boolean, hasActiveTool
 }
 
 export const fromRequest = Effect.fn("OpenAIChat.fromRequest")(function* (
-  request: LLMRequest,
+  request: TextRequest,
   options: LoweringOptions = {},
 ) {
   // `fromRequest` returns the provider body only. Endpoint, auth, framing,
@@ -923,7 +915,7 @@ export const fromRequest = Effect.fn("OpenAIChat.fromRequest")(function* (
 })
 
 // Provider wrappers that pass their own marker writer keep it; otherwise a declared cache format adds one.
-const declaredCacheControl = (request: LLMRequest) =>
+const declaredCacheControl = (request: TextRequest) =>
   request.model.compatibility?.cacheFormat === undefined ? undefined : Cache.cacheControl()
 
 // =============================================================================

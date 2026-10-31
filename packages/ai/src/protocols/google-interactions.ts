@@ -11,7 +11,7 @@ import {
   LLMEvent,
   ProviderID,
   Usage,
-  type LLMRequest,
+  type TextRequest,
   type ProviderMetadata,
   type ToolResultPart,
 } from "../schema/index.js"
@@ -251,7 +251,7 @@ const signature = (metadata: ProviderMetadata | undefined, key: string) => {
   return typeof value?.interactionSignature === "string" ? value.interactionSignature : undefined
 }
 
-const lowerMessages = Effect.fnUntraced(function* (request: LLMRequest) {
+const lowerMessages = Effect.fnUntraced(function* (request: TextRequest) {
   const steps: InputStep[] = []
   const key = request.model.route.providerMetadataKey ?? request.model.provider
   for (const message of request.messages) {
@@ -333,7 +333,7 @@ const lowerToolResult = Effect.fnUntraced(function* (part: ToolResultPart) {
   })
 })
 
-const fromRequest = Effect.fn("GoogleInteractions.fromRequest")(function* (request: LLMRequest) {
+const fromRequest = Effect.fn("GoogleInteractions.fromRequest")(function* (request: TextRequest) {
   const options = yield* decodeOptions(request.providerOptions ?? {})
   const flattened = ProviderShared.flattenToolRequest(request)
   if (flattened.tools.some((tool) => tool.native !== undefined))
@@ -412,11 +412,7 @@ const mapUsage = (usage: RawUsage | undefined, key: string) => {
   })
 }
 
-const onStart = Effect.fnUntraced(function* (
-  state: ParserState,
-  index: number,
-  step: OutputStep,
-) {
+const onStart = Effect.fnUntraced(function* (state: ParserState, index: number, step: OutputStep) {
   const events: LLMEvent[] = []
   let lifecycle = Lifecycle.stepStart(state.lifecycle, events)
   let tools = state.tools
@@ -450,11 +446,7 @@ const onStart = Effect.fnUntraced(function* (
   return [{ ...state, lifecycle, tools, steps: { ...state.steps, [index]: step } }, events] satisfies StepResult
 })
 
-const onDelta = Effect.fnUntraced(function* (
-  state: ParserState,
-  index: number,
-  delta: typeof Delta.Type,
-) {
+const onDelta = Effect.fnUntraced(function* (state: ParserState, index: number, delta: typeof Delta.Type) {
   const step = state.steps[index]
   if (!step)
     return yield* ProviderShared.eventError(ADAPTER, "Interactions delta without step.start", encodeJson(delta))

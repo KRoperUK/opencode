@@ -18,7 +18,7 @@ const read_file = tool({
     path === "missing.txt" ? new ToolFailure({ message: `No such file: ${path}` }) : Effect.succeed("hello"),
 })
 
-const collect = (until?: LLM.LoopInput["until"]) =>
+const collect = (until?: LLM.TextLoopInput["until"]) =>
   ai.loop({ model, prompt: "Read the file.", tools: [read_file], until }).pipe(
     Stream.runCollect,
     Effect.map((events) => Array.from(events)),

@@ -13,7 +13,7 @@ import {
   UnknownProviderError,
   Usage,
   type FinishReasonDetails,
-  type LLMRequest,
+  type TextRequest,
   type MediaPart,
   type ToolCallPart,
   type ToolDefinition,
@@ -227,7 +227,7 @@ const lowerMedia = Effect.fnUntraced(function* (part: MediaPart) {
   return yield* ProviderShared.invalidRequest(`Mistral Chat does not support media type ${part.media.mediaType}`)
 })
 
-const lowerUser = Effect.fnUntraced(function* (message: LLMRequest["messages"][number]) {
+const lowerUser = Effect.fnUntraced(function* (message: TextRequest["messages"][number]) {
   const content: MistralUserContent[] = []
   for (const part of message.content) {
     if (part.type === "text") {
@@ -252,7 +252,7 @@ const lowerToolCall = (part: ToolCallPart, normalizeID: (id: string) => string):
 })
 
 const lowerAssistant = Effect.fnUntraced(function* (
-  message: LLMRequest["messages"][number],
+  message: TextRequest["messages"][number],
   normalizeID: (id: string) => string,
 ) {
   const structured = message.content.some(
@@ -286,7 +286,7 @@ const lowerAssistant = Effect.fnUntraced(function* (
 })
 
 const lowerToolResults = Effect.fnUntraced(function* (
-  message: LLMRequest["messages"][number],
+  message: TextRequest["messages"][number],
   normalizeID: (id: string) => string,
 ) {
   const output: MistralMessage[] = []
@@ -322,7 +322,7 @@ const lowerToolResults = Effect.fnUntraced(function* (
   return output
 })
 
-const lowerMessages = Effect.fnUntraced(function* (request: LLMRequest) {
+const lowerMessages = Effect.fnUntraced(function* (request: TextRequest) {
   const normalizeID = MistralToolID.normalizer(request)
   const messages: MistralMessage[] =
     request.system.length === 0
@@ -373,7 +373,7 @@ const lowerTool = (tool: ToolDefinition): MistralTool => ({
   function: { name: tool.name, description: tool.description, parameters: tool.inputSchema, strict: false },
 })
 
-export const fromRequest = Effect.fn("MistralChat.fromRequest")(function* (request: LLMRequest) {
+export const fromRequest = Effect.fn("MistralChat.fromRequest")(function* (request: TextRequest) {
   const options = yield* ProviderShared.validateWith(Schema.decodeUnknownEffect(MistralOptions))(
     request.providerOptions ?? {},
   )

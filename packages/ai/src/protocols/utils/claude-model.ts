@@ -1,4 +1,4 @@
-import type { LLMRequest } from "../../schema/index.js"
+import type { TextRequest } from "../../schema/index.js"
 
 export const THINKING_BINDING_BETA = "thinking-binding-controls-2026-08-01"
 
@@ -11,7 +11,7 @@ export const claudeVersion = (id: string) => {
   return { family: match.family, major: Number(match.major), minor: Number(match.minor ?? 0) }
 }
 
-export const supportsThinkingBlockBinding = (model: LLMRequest["model"]) => {
+export const supportsThinkingBlockBinding = (model: TextRequest["model"]) => {
   const override = model.compatibility?.supportsThinkingBlockBinding
   if (override !== undefined) return override
   const version = claudeVersion(model.id)

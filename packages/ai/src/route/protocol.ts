@@ -1,11 +1,17 @@
 import { Schema, type Effect } from "effect"
-import type { AIError, LanguageModelSanitizerCompatibility, LLMEvent, LLMRequest, ProtocolID } from "../schema/index.js"
+import type {
+  AIError,
+  LanguageModelSanitizerCompatibility,
+  LLMEvent,
+  TextRequest,
+  ProtocolID,
+} from "../schema/index.js"
 
 /**
  * The semantic API contract of one model server family.
  *
  * A `Protocol` owns the parts of a route that are intrinsic to "what does
- * this API look like": how a common `LLMRequest` becomes a provider-native
+ * this API look like": how a common `TextRequest` becomes a provider-native
  * body, what schema that body must satisfy before it is JSON-encoded, and
  * how the streaming response decodes back into common `LLMEvent`s.
  *
@@ -42,7 +48,7 @@ export interface Protocol<Body, Frame, Event, State> {
   /** Response side: streaming state machine. */
   readonly stream: ProtocolStream<Frame, Event, State>
   /** Whether `body.from` lowers `Message.effort(...)` markers; wrappers around another `body.from` must forward it. */
-  readonly supportsEffortUpdates?: (request: LLMRequest) => boolean
+  readonly supportsEffortUpdates?: (request: TextRequest) => boolean
   /** Tool schema sanitizer for every model on this protocol unless the model's compatibility sets one; wrappers around another `body.from` must forward it. */
   readonly sanitizer?: LanguageModelSanitizerCompatibility
 }
@@ -50,15 +56,15 @@ export interface Protocol<Body, Frame, Event, State> {
 export interface ProtocolBody<Body> {
   /** Schema for the validated provider-native body sent as the JSON request. */
   readonly schema: Schema.Codec<Body, unknown>
-  /** Build the provider-native body from a common `LLMRequest`. */
-  readonly from: (request: LLMRequest) => Effect.Effect<Body, AIError>
+  /** Build the provider-native body from a common `TextRequest`. */
+  readonly from: (request: TextRequest) => Effect.Effect<Body, AIError>
 }
 
 export interface ProtocolStream<Frame, Event, State> {
   /** Schema for one decoded streaming event, decoded from a transport frame. */
   readonly event: Schema.Codec<Event, Frame>
   /** Initial parser state. Called once per response with the resolved request. */
-  readonly initial: (request: LLMRequest) => State
+  readonly initial: (request: TextRequest) => State
   /** Translate one event into emitted `LLMEvent`s plus the next state. */
   readonly step: (state: State, event: Event) => Effect.Effect<readonly [State, ReadonlyArray<LLMEvent>], AIError>
   /** Optional request-completion signal for transports that do not end naturally. */
@@ -71,7 +77,7 @@ export interface ProtocolStream<Frame, Event, State> {
  * Construct a `Protocol` from its body and stream pieces:
  *
  * - `body.schema` infers the provider-native request body shape.
- * - `body.from` ties the common `LLMRequest` to the provider body.
+ * - `body.from` ties the common `TextRequest` to the provider body.
  * - `stream.event` infers the decoded streaming event and the wire frame.
  * - `stream.initial`, `stream.step`, and `stream.onHalt` infer the parser state.
  *

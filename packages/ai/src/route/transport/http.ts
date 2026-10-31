@@ -13,7 +13,7 @@ import {
   TransportError,
   type HttpContext,
   type HttpTimeout,
-  type LLMRequest,
+  type TextRequest,
 } from "../../schema/index.js"
 import { RequestExecutor } from "../executor.js"
 
@@ -32,7 +32,7 @@ export interface HttpPrepared<Frame> {
   readonly middleware?: HttpMiddleware
 }
 
-const bodyWithOverlay = <Body>(body: Body, request: LLMRequest, encodeBody: (body: Body) => string) =>
+const bodyWithOverlay = <Body>(body: Body, request: TextRequest, encodeBody: (body: Body) => string) =>
   Effect.gen(function* () {
     if (request.http?.body === undefined) return { jsonBody: body, bodyText: encodeBody(body) }
     if (ProviderShared.isRecord(body)) {

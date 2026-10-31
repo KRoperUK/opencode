@@ -1,4 +1,4 @@
-// Apply an `LLMRequest.cache` policy by injecting `CacheHint`s onto the parts
+// Apply an `TextRequest.cache` policy by injecting `CacheHint`s onto the parts
 // the policy designates. Runs once at compile time, before the per-protocol
 // body builder, so the existing inline-hint lowering path handles the rest.
 //
@@ -11,7 +11,7 @@
 // Manual `cache: CacheHint` placements on individual parts are preserved and
 // count against the four-breakpoint budget; auto only fills remaining slots.
 import { CacheHint, type CachePolicy, type CachePolicyObject, type CacheTTL } from "./schema/options.js"
-import { LLMRequest, Message, ToolDefinition, type ContentPart, type ToolEntry } from "./schema/messages.js"
+import { type TextRequest, Message, ToolDefinition, type ContentPart, type ToolEntry } from "./schema/messages.js"
 import { effortUpdate } from "./effort-updates.js"
 
 const AUTO: CachePolicyObject = {
@@ -44,7 +44,7 @@ const isAuto = (policy: CachePolicy | undefined) =>
     policy.messages === undefined)
 
 /** The requested cache lifetime, for routes that send it as a request-level option instead of on markers. */
-export const requestTTL = (request: LLMRequest) => (typeof request.cache === "object" ? request.cache.ttl : undefined)
+export const requestTTL = (request: TextRequest) => (typeof request.cache === "object" ? request.cache.ttl : undefined)
 
 // Protocols whose wire format ignores inline cache markers (OpenAI's implicit
 // prefix caching, Gemini's implicit + out-of-band CachedContent). Skip the
@@ -104,7 +104,11 @@ const countToolHints = (tools: ReadonlyArray<ToolEntry>): number =>
     0,
   )
 
-const markSystemBoundaries = (system: LLMRequest["system"], hint: CacheHint, budget: Budget): LLMRequest["system"] => {
+const markSystemBoundaries = (
+  system: TextRequest["system"],
+  hint: CacheHint,
+  budget: Budget,
+): TextRequest["system"] => {
   if (system.length === 0) return system
   let changed = false
   const next = system.map((part, index) => {
@@ -174,7 +178,7 @@ const markMessages = (
   return next
 }
 
-const countHints = (request: LLMRequest) =>
+const countHints = (request: TextRequest) =>
   countToolHints(request.tools) +
   request.system.reduce((count, part) => count + (part.cache === undefined ? 0 : 1), 0) +
   request.messages.reduce(
@@ -187,7 +191,7 @@ const countHints = (request: LLMRequest) =>
     0,
   )
 
-export const applyCachePolicy = (request: LLMRequest): LLMRequest => {
+export const applyCachePolicy = (request: TextRequest): TextRequest => {
   const policy = selectPolicy(request)
   if (!policy.tools && !policy.system && !policy.messages) return request
 
@@ -198,17 +202,17 @@ export const applyCachePolicy = (request: LLMRequest): LLMRequest => {
   const messages = policy.messages ? markMessages(request.messages, policy.messages, hint, budget) : request.messages
 
   if (tools === request.tools && system === request.system && messages === request.messages) return request
-  return LLMRequest.update(request, { tools, system, messages })
+  return { ...request, tools, system, messages }
 }
 
 /** Whether the cache policy places inline markers, which then carry the requested lifetime. */
-export const placesMarkers = (request: LLMRequest) => {
+export const placesMarkers = (request: TextRequest) => {
   const policy = selectPolicy(request)
   return Boolean(policy.tools || policy.system || policy.messages)
 }
 
 // A declared cache format overrides the route allowlist and its model-ID heuristics.
-const selectPolicy = (request: LLMRequest): CachePolicyObject => {
+const selectPolicy = (request: TextRequest): CachePolicyObject => {
   const format = request.model.compatibility?.cacheFormat
   const route = request.model.route.id
   const auto = isAuto(request.cache)

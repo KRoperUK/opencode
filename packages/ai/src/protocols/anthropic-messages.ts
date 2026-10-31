@@ -12,7 +12,7 @@ import {
   AIError,
   CacheTTL,
   HttpOptions,
-  LLMRequest,
+  type TextRequest,
   LLMEvent,
   mergeJsonRecords,
   Usage,
@@ -510,7 +510,7 @@ const AnthropicEvent = withUntypedFrames(TypedAnthropicEvent)
 type AnthropicEvent = Schema.Schema.Type<typeof AnthropicEvent>
 
 interface ParserState {
-  readonly provider: LLMRequest["model"]["provider"]
+  readonly provider: TextRequest["model"]["provider"]
   readonly compactions: Readonly<Record<number, string | null>>
   readonly providerMetadataKey: string
   readonly tools: ToolStream.State<number>
@@ -565,7 +565,7 @@ const lowerTool = (breakpoints: Cache.Breakpoints, tool: ToolDefinition): Anthro
   cache_control: cacheControl(breakpoints, tool.cache),
 })
 
-const lowerToolChoice = (toolChoice: NonNullable<LLMRequest["toolChoice"]>) =>
+const lowerToolChoice = (toolChoice: NonNullable<TextRequest["toolChoice"]>) =>
   ProviderShared.matchToolChoice("Anthropic Messages", toolChoice, {
     auto: () => ({
       type: "auto" as const,
@@ -685,7 +685,11 @@ const citationsFromMetadata = (metadata: MediaPart["metadata"]): AnthropicDocume
 
 const isHttpUrl = (value: string) => /^https?:\/\//i.test(value.trim())
 
-const lowerMedia = Effect.fnUntraced(function* (part: MediaPart, request: LLMRequest, breakpoints?: Cache.Breakpoints) {
+const lowerMedia = Effect.fnUntraced(function* (
+  part: MediaPart,
+  request: TextRequest,
+  breakpoints?: Cache.Breakpoints,
+) {
   const mime = part.media.mediaType.toLowerCase()
   const cacheControlValue = breakpoints ? cacheControl(breakpoints, part.cache) : undefined
   if (mime.startsWith("video/")) {
@@ -813,12 +817,12 @@ const lowerMedia = Effect.fnUntraced(function* (part: MediaPart, request: LLMReq
 
 // Tool results may carry structured text, images, and documents. Keep media as provider-native
 // content instead of JSON-stringifying base64 into a prompt string.
-const lowerToolResultContentItem = Effect.fnUntraced(function* (item: Tool.Content, request: LLMRequest) {
+const lowerToolResultContentItem = Effect.fnUntraced(function* (item: Tool.Content, request: TextRequest) {
   if (item.type === "text") return { type: "text" as const, text: item.text } satisfies AnthropicTextBlock
   return yield* lowerMedia(ProviderShared.toolFileMedia(item), request)
 })
 
-const lowerToolResultContent = Effect.fnUntraced(function* (part: ToolResultPart, request: LLMRequest) {
+const lowerToolResultContent = Effect.fnUntraced(function* (part: ToolResultPart, request: TextRequest) {
   // Text / json / error results stay as a string for backward compatibility
   // with existing cassettes and provider expectations.
   if (part.result.type !== "content") return ProviderShared.toolResultText(part)
@@ -827,7 +831,7 @@ const lowerToolResultContent = Effect.fnUntraced(function* (part: ToolResultPart
   return yield* Effect.forEach(content, (item) => lowerToolResultContentItem(item, request))
 })
 
-const requireThinkingSignature = (request: LLMRequest) => {
+const requireThinkingSignature = (request: TextRequest) => {
   if (request.model.compatibility?.requireSignature !== undefined) return request.model.compatibility.requireSignature
   const provider = request.model.provider.toLowerCase()
   const model = request.model.id.toLowerCase()
@@ -848,7 +852,7 @@ const requireThinkingSignature = (request: LLMRequest) => {
 }
 
 // Opus 4.8 and every Claude 5 model accept mid-conversation system messages; later versions inherit support.
-const supportsNativeSystemUpdates = (request: LLMRequest) => {
+const supportsNativeSystemUpdates = (request: TextRequest) => {
   const version = claudeVersion(request.model.id)
   if (version === undefined) return false
   if (version.family === "opus" && version.major === 4) return version.minor >= 8
@@ -859,7 +863,7 @@ const supportsNativeSystemUpdates = (request: LLMRequest) => {
 const acceptsNativeSystemAfter = (message: AnthropicMessage | undefined) =>
   message?.role === "user" || (message?.role === "assistant" && message.content.at(-1)?.type === "server_tool_use")
 
-const splitsLocalToolResults = (messages: LLMRequest["messages"], index: number) => {
+const splitsLocalToolResults = (messages: TextRequest["messages"], index: number) => {
   const pending = new Set<string>()
   for (const message of messages.slice(0, index)) {
     for (const part of message.content) {
@@ -872,7 +876,7 @@ const splitsLocalToolResults = (messages: LLMRequest["messages"], index: number)
 }
 
 const lowerNativeSystemUpdate = Effect.fnUntraced(function* (
-  message: LLMRequest["messages"][number],
+  message: TextRequest["messages"][number],
   breakpoints: Cache.Breakpoints,
 ) {
   const content = yield* ProviderShared.systemUpdateText("Anthropic Messages", message)
@@ -887,7 +891,7 @@ const lowerNativeSystemUpdate = Effect.fnUntraced(function* (
 })
 
 const lowerWrappedSystemUpdate = Effect.fnUntraced(function* (
-  message: LLMRequest["messages"][number],
+  message: TextRequest["messages"][number],
   breakpoints: Cache.Breakpoints,
 ) {
   const part = yield* ProviderShared.wrappedSystemUpdate("Anthropic Messages", message)
@@ -900,13 +904,13 @@ const appendToUserTurn = (messages: AnthropicMessage[], block: AnthropicUserBloc
   else messages.push({ role: "user", content: [block] })
 }
 
-const lowerMessages = Effect.fnUntraced(function* (request: LLMRequest, breakpoints: Cache.Breakpoints) {
+const lowerMessages = Effect.fnUntraced(function* (request: TextRequest, breakpoints: Cache.Breakpoints) {
   const messages: AnthropicMessage[] = []
   const providerMetadataKey = request.model.route.providerMetadataKey ?? request.model.provider
   // Text updates stay where they are unless a user turn follows them; then they move after the latest
   // user turn, the nearest spot where Anthropic accepts a native system message.
   const holdUpdates = supportsNativeSystemUpdates(request)
-  const held: Array<LLMRequest["messages"][number]> = []
+  const held: Array<TextRequest["messages"][number]> = []
   const releaseHeld = Effect.fnUntraced(function* () {
     const native = acceptsNativeSystemAfter(messages.findLast((message) => message.role !== "system"))
     for (const update of held.splice(0)) {
@@ -1026,7 +1030,7 @@ const lowerMessages = Effect.fnUntraced(function* (request: LLMRequest, breakpoi
 const isThinkingOff = Schema.is(AnthropicThinkingDisabled)
 
 // Per-turn effort started with Claude Opus 5 and every Claude 5.1 model; later versions of any family inherit it.
-const supportsEffortUpdates = (request: LLMRequest) => {
+const supportsEffortUpdates = (request: TextRequest) => {
   if (isThinkingOff(request.providerOptions?.thinking)) return false
   const override = request.model.compatibility?.supportsEffortUpdates
   if (override !== undefined) return override
@@ -1036,7 +1040,7 @@ const supportsEffortUpdates = (request: LLMRequest) => {
   return version.major > 5 || (version.major === 5 && version.minor >= 1)
 }
 
-const applyThinkingBindingDefault = (model: LLMRequest["model"], thinking: AnthropicThinking | undefined) => {
+const applyThinkingBindingDefault = (model: TextRequest["model"], thinking: AnthropicThinking | undefined) => {
   if (isThinkingOff(thinking)) return thinking
   if (!supportsThinkingBlockBinding(model)) return thinking
   return {
@@ -1057,7 +1061,7 @@ const fitThinking = (thinking: AnthropicThinking | undefined, maxTokens: number)
       }
     : thinking
 
-const fromRequest = Effect.fn("AnthropicMessages.fromRequest")(function* (request: LLMRequest) {
+const fromRequest = Effect.fn("AnthropicMessages.fromRequest")(function* (request: TextRequest) {
   const options = yield* decodeOptions(request.providerOptions ?? {})
   const management = options.contextManagement
   const outputConfig = options.output_config ?? options.outputConfig
@@ -1406,10 +1410,7 @@ const onContentBlockDelta = Effect.fnUntraced(function* (
   return [state, NO_EVENTS] satisfies StepResult
 })
 
-const onContentBlockStop = Effect.fnUntraced(function* (
-  state: ParserState,
-  event: AnthropicEvent,
-) {
+const onContentBlockStop = Effect.fnUntraced(function* (state: ParserState, event: AnthropicEvent) {
   if (event.index === undefined) return [state, NO_EVENTS] satisfies StepResult
   if (event.index in state.compactions) {
     const { [event.index]: content, ...compactions } = state.compactions
@@ -1653,12 +1654,13 @@ export const transport = <
       const betas = new Set([...existingBetas, ...requiredBetas])
       return http.prepare({
         ...input,
-        request: LLMRequest.update(input.request, {
+        request: {
+          ...input.request,
           http: new HttpOptions({
             ...input.request.http,
             headers: { ...headers, "anthropic-beta": [...betas].join(",") },
           }),
-        }),
+        },
       })
     },
   }

@@ -1,5 +1,5 @@
 import { Schema } from "effect"
-import { ReasoningEffort, ReasoningEfforts, type LLMRequest } from "../../schema/index.js"
+import { ReasoningEffort, ReasoningEfforts, type TextRequest } from "../../schema/index.js"
 import { lenient, ProviderShared } from "../shared.js"
 
 export { ReasoningEffort, ReasoningEfforts }
@@ -67,7 +67,7 @@ export type Resolved = Omit<Options, "allowedTools"> & {
 
 const decodeOptions = Schema.decodeUnknownSync(Options)
 
-export const resolve = (request: LLMRequest): Resolved => {
+export const resolve = (request: TextRequest): Resolved => {
   const input = decodeOptions(request.providerOptions ?? {})
   return {
     ...input,

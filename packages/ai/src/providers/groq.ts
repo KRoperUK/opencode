@@ -6,7 +6,7 @@ import { AuthOptions, type ProviderAuthOption } from "../route/auth-options.js"
 import { Route, type RouteDefaultsInput } from "../route/client.js"
 import { Endpoint } from "../route/endpoint.js"
 import { Protocol } from "../route/protocol.js"
-import { ProviderID, type ModelID, type LLMRequest } from "../schema/index.js"
+import { ProviderID, type ModelID, type TextRequest } from "../schema/index.js"
 import type { OpenAIProviderOptionsInput } from "./openai-options.js"
 
 export const id = ProviderID.make("groq")
@@ -46,7 +46,7 @@ export const protocol = Protocol.make({
       include_reasoning: Schema.optional(Schema.Boolean),
       user: Schema.optional(Schema.String),
     }),
-    from: Effect.fn("Groq.fromRequest")(function* (request: LLMRequest) {
+    from: Effect.fn("Groq.fromRequest")(function* (request: TextRequest) {
       const options = yield* ProviderShared.validateWith(Schema.decodeUnknownEffect(Options))(
         request.providerOptions ?? {},
       )

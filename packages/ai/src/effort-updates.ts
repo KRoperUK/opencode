@@ -1,6 +1,6 @@
 // Changing the top-level reasoning effort invalidates the provider prompt cache. Protocols with a native
 // per-message update keep it frozen and lower `Message.effort(...)` markers instead; other routes strip them.
-import { LLMRequest, type EffortPart, type Message } from "./schema/messages.js"
+import { type TextRequest, type EffortPart, type Message } from "./schema/messages.js"
 
 export const effortUpdate = (message: Message): EffortPart | undefined => {
   if (message.role !== "system" || message.content.length !== 1) return undefined
@@ -8,16 +8,16 @@ export const effortUpdate = (message: Message): EffortPart | undefined => {
   return part.type === "effort" ? part : undefined
 }
 
-export const stripEffortUpdates = (request: LLMRequest) => {
+export const stripEffortUpdates = (request: TextRequest) => {
   const messages = request.messages.filter((message) => effortUpdate(message) === undefined)
-  return messages.length === request.messages.length ? request : LLMRequest.update(request, { messages })
+  return messages.length === request.messages.length ? request : { ...request, messages }
 }
 
-export const applyEffortUpdates = (request: LLMRequest): LLMRequest =>
+export const applyEffortUpdates = (request: TextRequest): TextRequest =>
   request.model.route.supportsEffortUpdates?.(request) ? request : stripEffortUpdates(request)
 
 // Reverted or forked history can leave the last marker disagreeing with the requested effort.
-export const resolveEffortUpdates = (request: LLMRequest, current: string | undefined) => {
+export const resolveEffortUpdates = (request: TextRequest, current: string | undefined) => {
   const updates = request.messages.flatMap((message) => effortUpdate(message) ?? [])
   if (updates.length === 0) return { request, effort: current }
   if (updates.at(-1)?.effort !== current) return { request: stripEffortUpdates(request), effort: current }

@@ -6,7 +6,7 @@ import { Auth } from "../route/auth.js"
 import { Endpoint } from "../route/endpoint.js"
 import { Protocol } from "../route/protocol.js"
 import { HttpTransport } from "../route/transport/index.js"
-import { LLMRequest, type ToolDefinition, type ToolEntry } from "../schema/index.js"
+import type { TextRequest, ToolDefinition, ToolEntry } from "../schema/index.js"
 import { requestTTL } from "../cache-policy.js"
 import { resolveEffortUpdates } from "../effort-updates.js"
 import { OpenResponses } from "./open-responses.js"
@@ -163,7 +163,7 @@ const adapter = {
 
 // GPT-6 and later default to `configuration_update` support, except in `reasoning.mode: "pro"`
 // or alongside automatic `context_management` compaction.
-const supportsEffortUpdates = (request: LLMRequest) => {
+const supportsEffortUpdates = (request: TextRequest) => {
   if (request.providerOptions?.contextManagement !== undefined) return false
   if (request.providerOptions?.reasoningMode === "pro") return false
   if (Schema.is(Schema.Struct({ mode: Schema.Literal("pro") }))(request.http?.body?.reasoning)) return false
@@ -183,7 +183,10 @@ const nativeImageTool = (tool: ToolDefinition) => {
   return Schema.is(OpenAIResponsesImageGenerationTool)(native) ? native : undefined
 }
 
-const lowerTool = Effect.fnUntraced(function* (tool: ToolDefinition, custom: ReadonlyMap<string, OpenAIFreeform.Custom>) {
+const lowerTool = Effect.fnUntraced(function* (
+  tool: ToolDefinition,
+  custom: ReadonlyMap<string, OpenAIFreeform.Custom>,
+) {
   const native = nativeImageToolInput(tool)
   if (native !== undefined) {
     if (Schema.is(OpenAIResponsesImageGenerationTool)(native)) return native
@@ -196,7 +199,10 @@ const lowerTool = Effect.fnUntraced(function* (tool: ToolDefinition, custom: Rea
 
 // Native namespaces hold only function tools, so deeper levels flatten into
 // the leaf names the same way non-native protocols flatten the whole tree.
-const lowerToolEntry = Effect.fnUntraced(function* (tool: ToolEntry, custom: ReadonlyMap<string, OpenAIFreeform.Custom>) {
+const lowerToolEntry = Effect.fnUntraced(function* (
+  tool: ToolEntry,
+  custom: ReadonlyMap<string, OpenAIFreeform.Custom>,
+) {
   if (tool.type === "tool") return yield* lowerTool(tool, custom)
   // OpenAI requires a namespace description; fall back to a generic one so a
   // missing description never blocks the request.
@@ -210,13 +216,13 @@ const lowerToolEntry = Effect.fnUntraced(function* (tool: ToolEntry, custom: Rea
   }
 })
 
-const lowerTools = (request: LLMRequest) => {
+const lowerTools = (request: TextRequest) => {
   const custom = OpenAIFreeform.tools(request)
   return Effect.forEach(request.tools, (tool) => lowerToolEntry(tool, custom))
 }
 
 const lowerToolChoice = (
-  toolChoice: NonNullable<LLMRequest["toolChoice"]>,
+  toolChoice: NonNullable<TextRequest["toolChoice"]>,
   tools: ReadonlyArray<ToolEntry>,
   custom: ReadonlyMap<string, OpenAIFreeform.Custom>,
 ) =>
@@ -230,7 +236,7 @@ const lowerToolChoice = (
         : OpenResponses.namedTool(name, custom),
   })
 
-const fromRequest = Effect.fn("OpenAIResponses.fromRequest")(function* (request: LLMRequest) {
+const fromRequest = Effect.fn("OpenAIResponses.fromRequest")(function* (request: TextRequest) {
   const management = yield* ProviderShared.validateWith(
     Schema.decodeUnknownEffect(Schema.UndefinedOr(ContextManagement)),
   )(request.providerOptions?.contextManagement)
@@ -264,7 +270,7 @@ const fromRequest = Effect.fn("OpenAIResponses.fromRequest")(function* (request:
 
 const checkpointBody = {
   schema: CheckpointBody,
-  from: Effect.fn("OpenAIResponses.checkpointBody")(function* (request: LLMRequest) {
+  from: Effect.fn("OpenAIResponses.checkpointBody")(function* (request: TextRequest) {
     const overlay = request.http?.body
     // Complete history is required for stateless replay and SSE recovery. Raw input overrides bypass that contract.
     if (

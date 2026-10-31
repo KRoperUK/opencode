@@ -1,6 +1,6 @@
 import { Effect, Schema } from "effect"
 import { Protocol } from "../route/protocol.js"
-import type { LLMRequest } from "../schema/index.js"
+import type { TextRequest } from "../schema/index.js"
 import { OpenResponses } from "./open-responses.js"
 import { JsonObject, optionalNull, ProviderShared } from "./shared.js"
 import { ResponsesHostedTools } from "./utils/responses-hosted-tools.js"
@@ -56,7 +56,7 @@ const adapter = {
   restoreHostedToolItem: (item: unknown) => (Schema.is(XAIResponsesHostedToolItem)(item) ? item : undefined),
 } satisfies OpenResponses.ProviderAdapter
 
-const fromRequest = Effect.fn("XAIResponses.fromRequest")(function* (request: LLMRequest) {
+const fromRequest = Effect.fn("XAIResponses.fromRequest")(function* (request: TextRequest) {
   if (request.providerOptions?.contextManagement !== undefined)
     return yield* ProviderShared.unsupportedOperation({
       operation: "in-band-compaction",

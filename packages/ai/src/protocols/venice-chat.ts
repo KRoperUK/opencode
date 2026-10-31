@@ -1,6 +1,6 @@
 import { Effect, Schema } from "effect"
 import { Protocol } from "../route/protocol.js"
-import { AIError, LLMEvent, type LanguageModelCompatibility, type LLMRequest } from "../schema/index.js"
+import { AIError, LLMEvent, type LanguageModelCompatibility, type TextRequest } from "../schema/index.js"
 import { classifyProviderFailure } from "../provider-error.js"
 import { OpenAIChat } from "./openai-chat.js"
 import { JsonObject, optionalArray, optionalNull, ProviderShared } from "./shared.js"
@@ -159,7 +159,7 @@ const MARKER = "__ENCRYPTED_REASONING__"
 // Request lowering
 // ---------------------------------------------------------------------------
 
-const fromRequest = Effect.fn("VeniceChat.fromRequest")(function* (request: LLMRequest) {
+const fromRequest = Effect.fn("VeniceChat.fromRequest")(function* (request: TextRequest) {
   const options = yield* ProviderShared.validateWith(Schema.decodeUnknownEffect(Options))(request.providerOptions ?? {})
   const body = yield* OpenAIChat.fromRequest(request, {
     cacheControl: cacheControl(),

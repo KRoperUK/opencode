@@ -15,7 +15,7 @@ import { Framing } from "../route/framing.js"
 import { MediaRoute } from "../route/media.js"
 import type { Protocol } from "../route/protocol.js"
 import {
-  LLMRequest,
+  type TextRequest,
   ModelID,
   ProviderID,
   ProviderMetadata,
@@ -124,7 +124,7 @@ const GatewayOptionsSchema = Schema.Struct({
 const decodeOptions = ProviderShared.validateWith(Schema.decodeUnknownEffect(GatewayOptionsSchema))
 
 const prepare = (api: "messages" | "responses" | "chat") =>
-  Effect.fnUntraced(function* (request: LLMRequest) {
+  Effect.fnUntraced(function* (request: TextRequest) {
     const options = yield* decodeOptions(request.providerOptions ?? {})
     const providerOptions = (() => {
       if (!options.upstream && !options.gateway) return undefined
@@ -137,13 +137,14 @@ const prepare = (api: "messages" | "responses" | "chat") =>
         if (effort === undefined) return { request, body: { providerOptions } }
         const enabled = effort !== "none"
         const thinking = request.providerOptions?.thinking ?? { type: enabled ? "adaptive" : "disabled" }
-        const next = LLMRequest.update(request, {
+        const next = {
+          ...request,
           providerOptions: {
             ...request.providerOptions,
             effort: enabled ? effort : undefined,
             thinking,
           },
-        })
+        }
         return { request: next, body: { providerOptions } }
       }
       case "responses":

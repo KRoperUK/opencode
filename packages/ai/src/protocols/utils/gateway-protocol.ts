@@ -1,6 +1,6 @@
 import { Effect, Option, Schema } from "effect"
 import { Protocol } from "../../route/protocol.js"
-import { LLMEvent, mergeJsonRecords, type AIError, type LLMRequest } from "../../schema/index.js"
+import { LLMEvent, mergeJsonRecords, type AIError, type TextRequest } from "../../schema/index.js"
 import { JsonObject, lenient } from "../shared.js"
 
 interface ParserState<Inner> {
@@ -44,11 +44,11 @@ export function gatewayProtocol<Body, Event, State>(
   input: {
     readonly id: string
     readonly prepare: (
-      request: LLMRequest,
-    ) => Effect.Effect<{ readonly request: LLMRequest; readonly body: Record<string, unknown> }, AIError>
+      request: TextRequest,
+    ) => Effect.Effect<{ readonly request: TextRequest; readonly body: Record<string, unknown> }, AIError>
   },
 ) {
-  const initial = (request: LLMRequest): ParserState<State> => ({
+  const initial = (request: TextRequest): ParserState<State> => ({
     inner: protocol.stream.initial(request),
   })
   const onHalt = protocol.stream.onHalt
@@ -57,7 +57,7 @@ export function gatewayProtocol<Body, Event, State>(
     id: input.id,
     body: {
       schema: JsonObject,
-      from: Effect.fnUntraced(function* (request: LLMRequest) {
+      from: Effect.fnUntraced(function* (request: TextRequest) {
         const prepared = yield* input.prepare(request)
         const body = yield* protocol.body.from(prepared.request)
         return { ...body, ...prepared.body }

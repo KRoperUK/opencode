@@ -895,8 +895,8 @@ The hosted result is represented as a provider-executed tool call and a tool res
 
 Everything below is exported from `@opencode/ai/effect` unless noted.
 
-- **`ai.request({...})`** — build a provider-neutral `LLMRequest`. Accepts ergonomic inputs (`system: string`, `prompt: string`) that normalize into the canonical Schema classes.
-- **`ai.generate` / `ai.stream`** — run direct input or an `LLMRequest` through `LLMClient` for one-import use.
+- **`ai.request({...})`** — build a provider-neutral `TextRequest`, a plain object. Accepts ergonomic inputs (`system: string`, `prompt: string`) and normalizes them into `system`, `messages` and `tools` arrays. Edit it with a spread, or pass the edited object back to `ai.request`.
+- **`ai.generate` / `ai.stream`** — run direct input or a `TextRequest` through `LLMClient` for one-import use.
 - **`ai.loop`** — stream model calls, running `tool(...)` tools between them until the model stops calling tools.
 - **`Message.user(...)` / `Message.assistant(...)` / `Message.tool(...)`** — message constructors from the canonical schema model.
 - **`LanguageModel.make(...)` / `ToolCallPart.make(...)` / `ToolResultPart.make(...)` / `ToolDefinition.make(...)`** — model and tool-related constructors from the canonical schema model.
@@ -1251,7 +1251,7 @@ Response helpers build common event arrays: `TestLLM.text(value, id)`, `textWith
 `complete({ reason, usage?, providerMetadata? }, ...events)`. `failAfter(error, ...events)` and `hangAfter(...events)`
 return streams that fail or never finish after the given events.
 
-`compileRequest`, also from `@opencode/ai/testing`, compiles an `LLMRequest` through its route without sending it, so
+`compileRequest`, also from `@opencode/ai/testing`, compiles a `TextRequest` through its route without sending it, so
 tests can assert the provider payload.
 
 Other modalities and the Promise client have no test double. Test them over a custom executor layer, such as
@@ -1272,9 +1272,7 @@ Prefer this operation, where supported, when the application owns compaction pol
 ```ts
 const compacted = Effect.gen(function* () {
   const result = yield* ai.compact(request)
-  const next = LLMRequest.update(request, {
-    messages: result.replacement,
-  })
+  const next = { ...request, messages: result.replacement }
   return yield* ai.generate(next)
 })
 ```
@@ -1334,7 +1332,7 @@ Enable OpenAI compaction with typed provider options:
 
 ```ts
 import { Effect } from "effect"
-import { ai, LLMClient, LLMRequest, Message } from "@opencode/ai/effect"
+import { ai, LLMClient, Message } from "@opencode/ai/effect"
 import { OpenAI } from "@opencode/ai/providers"
 
 const request = ai.request({
@@ -1346,9 +1344,7 @@ const request = ai.request({
 })
 const continued = Effect.gen(function* () {
   const response = yield* LLMClient.generate(request)
-  return LLMRequest.update(request, {
-    messages: [...request.messages, response.message, Message.user("Continue")],
-  })
+  return { ...request, messages: [...request.messages, response.message, Message.user("Continue")] }
 })
 ```
 
@@ -1400,7 +1396,7 @@ Provider references: [OpenAI](https://developers.openai.com/api/docs/guides/comp
 
 ## Caching
 
-Prompt caching is **on by default**. Every `LLMRequest` resolves to `cache: "auto"` unless the caller opts out with `cache: "none"`. Each protocol translates `CacheHint`s to its wire format (`cache_control` on Anthropic, `cachePoint` on Bedrock; OpenAI and Gemini do implicit caching server-side and don't need inline markers — auto is a no-op there).
+Prompt caching is **on by default**. Every `TextRequest` resolves to `cache: "auto"` unless the caller opts out with `cache: "none"`. Each protocol translates `CacheHint`s to its wire format (`cache_control` on Anthropic, `cachePoint` on Bedrock; OpenAI and Gemini do implicit caching server-side and don't need inline markers — auto is a no-op there).
 
 ### Auto placement
 

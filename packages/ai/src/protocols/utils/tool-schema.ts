@@ -1,4 +1,4 @@
-import { ToolDefinition, type JsonSchema, type LanguageModel, type LLMRequest } from "../../schema/index.js"
+import { ToolDefinition, type JsonSchema, type LanguageModel, type TextRequest } from "../../schema/index.js"
 import { isRecord } from "../../utils/record.js"
 import { GeminiJsonSchema } from "./gemini-json-schema.js"
 
@@ -101,7 +101,7 @@ const modelCompatibility = (schema: JsonSchema, model: LanguageModel): JsonSchem
 }
 
 // Applied once to every request before any protocol builds its body, including tools in namespaces.
-const tools = (entries: LLMRequest["tools"], model: LanguageModel): LLMRequest["tools"] =>
+const tools = (entries: TextRequest["tools"], model: LanguageModel): TextRequest["tools"] =>
   entries.map((tool) =>
     tool.type === "tool"
       ? new ToolDefinition({ ...tool, inputSchema: modelCompatibility(tool.inputSchema, model) })

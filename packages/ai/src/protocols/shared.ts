@@ -7,7 +7,7 @@ import {
   InvalidRequestError,
   UnsupportedOperationError,
   AIError,
-  LLMRequest,
+  type TextRequest,
   Message,
   ToolDefinition,
   type ContentPart,
@@ -84,12 +84,12 @@ export const OPENAI_PROMPT_CACHE_KEY_MAX_LENGTH = 64
 
 // Body-level `prompt_cache_key` is off when caching is disabled or the model
 // explicitly rejects the field. Header-based affinity is unaffected.
-export const sendsPromptCacheKey = (request: LLMRequest) =>
+export const sendsPromptCacheKey = (request: TextRequest) =>
   request.cache !== "none" && request.model.compatibility?.supportsPromptCacheKey !== false
 
 // OpenAI limits `prompt_cache_key` to 64 chars; DeepSeek and Zai inherit the same
 // limit via their OpenAI-compatible APIs. Clamp with unicode-aware slicing.
-export const promptCacheKey = (request: LLMRequest): string | undefined => {
+export const promptCacheKey = (request: TextRequest): string | undefined => {
   if (!sendsPromptCacheKey(request) || request.promptCacheKey === undefined) return undefined
   const chars = Array.from(request.promptCacheKey)
   if (chars.length <= OPENAI_PROMPT_CACHE_KEY_MAX_LENGTH) return request.promptCacheKey
@@ -202,10 +202,7 @@ export const wrapSystemUpdate = (parts: ReadonlyArray<{ readonly text: string }>
  * raw retrieved, tool, or web content into privileged updates: keep untrusted
  * data in ordinary user/tool messages instead.
  */
-export const systemUpdateText = Effect.fnUntraced(function* (
-  route: string,
-  message: LLMRequest["messages"][number],
-) {
+export const systemUpdateText = Effect.fnUntraced(function* (route: string, message: TextRequest["messages"][number]) {
   const content: TextPart[] = []
   for (const part of message.content) {
     if (!supportsContent(part, ["text"])) return yield* unsupportedContent(route, "system", ["text"])
@@ -217,7 +214,7 @@ export const systemUpdateText = Effect.fnUntraced(function* (
 /** Lower an unsupported privileged update into visible, in-order user text. */
 export const wrappedSystemUpdate = Effect.fnUntraced(function* (
   route: string,
-  message: LLMRequest["messages"][number],
+  message: TextRequest["messages"][number],
 ) {
   const content = yield* systemUpdateText(route, message)
   return { type: "text" as const, text: wrapSystemUpdate(content), cache: content.at(-1)?.cache }
@@ -349,7 +346,7 @@ export const flattenTools = (tools: ReadonlyArray<ToolEntry>, path: ReadonlyArra
   return [...new Map(flat.map((tool) => [tool.name, tool])).values()]
 }
 
-export const flattenToolRequest = (request: LLMRequest) => {
+export const flattenToolRequest = (request: TextRequest) => {
   const messages = request.messages.map((message) => {
     const content = message.content.map((part) => {
       if ((part.type !== "tool-call" && part.type !== "tool-result") || part.namespace === undefined) return part
@@ -363,13 +360,13 @@ export const flattenToolRequest = (request: LLMRequest) => {
     tools: flattenTools(request.tools),
     request: messages.every((message, index) => message === request.messages[index])
       ? request
-      : LLMRequest.update(request, { messages }),
+      : { ...request, messages },
   }
 }
 
 export const matchToolChoice = <Auto, None, Required, Tool>(
   route: string,
-  toolChoice: NonNullable<LLMRequest["toolChoice"]>,
+  toolChoice: NonNullable<TextRequest["toolChoice"]>,
   cases: {
     readonly auto: () => Auto
     readonly none: () => None
@@ -400,7 +397,7 @@ export const supportsContent = <const Type extends ContentType>(
 
 export const unsupportedContent = (
   route: string,
-  role: LLMRequest["messages"][number]["role"],
+  role: TextRequest["messages"][number]["role"],
   types: ReadonlyArray<ContentType>,
 ) => invalidRequest(`${route} ${role} messages only support ${formatContentTypes(types)} content for now`)
 

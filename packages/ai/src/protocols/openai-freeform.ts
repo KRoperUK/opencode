@@ -3,7 +3,7 @@ import {
   ToolDefinition,
   type Freeform,
   type LLMEvent,
-  type LLMRequest,
+  type TextRequest,
   type ProviderMetadata,
 } from "../schema/index.js"
 import { encodeJson, flattenTools, isRecord } from "./shared.js"
@@ -27,7 +27,7 @@ export const resolve = (tool: ToolDefinition): Custom | undefined => {
 }
 
 /** Custom tools in this request, by flattened tool name. */
-export const tools = (request: LLMRequest): ReadonlyMap<string, Custom> =>
+export const tools = (request: TextRequest): ReadonlyMap<string, Custom> =>
   new Map(
     flattenTools(request.tools).flatMap((tool) => {
       const custom = resolve(tool)

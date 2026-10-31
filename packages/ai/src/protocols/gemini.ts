@@ -16,7 +16,7 @@ import {
   LLMEvent,
   Usage,
   type FinishReason,
-  type LLMRequest,
+  type TextRequest,
   type MediaPart,
   type ProviderMetadata,
   type ProviderOptions,
@@ -284,7 +284,7 @@ const lowerTool = (tool: ToolDefinition) => ({
   parametersJsonSchema: tool.inputSchema,
 })
 
-const lowerToolConfig = (toolChoice: NonNullable<LLMRequest["toolChoice"]>) =>
+const lowerToolConfig = (toolChoice: NonNullable<TextRequest["toolChoice"]>) =>
   ProviderShared.matchToolChoice("Gemini", toolChoice, {
     auto: () => ({ functionCallingConfig: { mode: "AUTO" as const } }),
     none: () => ({ functionCallingConfig: { mode: "NONE" as const } }),
@@ -309,7 +309,7 @@ const lowerToolCall = (part: ToolCallPart, omitIds: boolean, metadataKey: string
   thoughtSignature: thoughtSignature(part.providerMetadata, metadataKey),
 })
 
-const lowerMessages = Effect.fnUntraced(function* (request: LLMRequest) {
+const lowerMessages = Effect.fnUntraced(function* (request: TextRequest) {
   const contents: GeminiContent[] = []
   const metadataKey = request.model.route.providerMetadataKey ?? request.model.provider
   const omitCallIds = omitsFunctionCallIds(request.model.id)
@@ -441,7 +441,7 @@ const lowerMessages = Effect.fnUntraced(function* (request: LLMRequest) {
   return contents
 })
 
-const fromRequest = Effect.fn("Gemini.fromRequest")(function* (request: LLMRequest) {
+const fromRequest = Effect.fn("Gemini.fromRequest")(function* (request: TextRequest) {
   const flattened = ProviderShared.flattenToolRequest(request)
   const hasTools = flattened.tools.length > 0
   const generation = request.generation
@@ -561,11 +561,7 @@ const mapContinuedUsage = (requests: ReadonlyArray<GeminiUsage>, metadataKey: st
 const terminalFinishReason = (finishReason: string | null | undefined) =>
   finishReason && finishReason !== "FINISH_REASON_UNSPECIFIED" ? finishReason : undefined
 
-const RECOVERABLE_FINISH_REASONS = new Set([
-  "MALFORMED_RESPONSE",
-  "MALFORMED_FUNCTION_CALL",
-  "UNEXPECTED_TOOL_CALL",
-])
+const RECOVERABLE_FINISH_REASONS = new Set(["MALFORMED_RESPONSE", "MALFORMED_FUNCTION_CALL", "UNEXPECTED_TOOL_CALL"])
 
 const mapFinishReason = (finishReason: string | undefined, hasToolCalls: boolean): FinishReason => {
   if (finishReason === undefined) return hasToolCalls ? "tool-calls" : "unknown"
@@ -917,12 +913,10 @@ export const transport: Transport<GeminiBody, Prepared, unknown> = {
         })
       const next = (continuationToken: string) =>
         Stream.unwrap(
-          sse
-            .prepare({ ...prepared.input, body: { ...prepared.input.body, continuationToken } })
-            .pipe(
-              Effect.flatMap((continued) => sse.execute(continued, request, runtime)),
-              Effect.map(respond),
-            ),
+          sse.prepare({ ...prepared.input, body: { ...prepared.input.body, continuationToken } }).pipe(
+            Effect.flatMap((continued) => sse.execute(continued, request, runtime)),
+            Effect.map(respond),
+          ),
         )
       const first = yield* sse.execute(prepared.http, request, runtime)
       return {

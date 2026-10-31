@@ -11,7 +11,7 @@ import { Endpoint } from "../route/endpoint.js"
 import { Framing } from "../route/framing.js"
 import { MediaRoute } from "../route/media.js"
 import { Protocol } from "../route/protocol.js"
-import { ProviderID, type LLMRequest, type ModelID, type ProviderOptions } from "../schema/index.js"
+import { ProviderID, type TextRequest, type ModelID, type ProviderOptions } from "../schema/index.js"
 
 export const id = ProviderID.make("minimax")
 
@@ -63,7 +63,7 @@ const chatProtocol = Protocol.make({
       thinking: ChatOptions.fields.thinking,
       reasoning_split: Schema.Boolean,
     }),
-    from: Effect.fn("MiniMax.chatFromRequest")(function* (request: LLMRequest) {
+    from: Effect.fn("MiniMax.chatFromRequest")(function* (request: TextRequest) {
       const options = yield* ProviderShared.validateWith(Schema.decodeUnknownEffect(ChatOptions))(
         request.providerOptions ?? {},
       )

@@ -9,7 +9,7 @@ import { Route, type RouteDefaultsInput } from "../route/client.js"
 import { Endpoint } from "../route/endpoint.js"
 import { Framing } from "../route/framing.js"
 import { Protocol } from "../route/protocol.js"
-import { ProviderID, type LLMRequest, type ModelID } from "../schema/index.js"
+import { ProviderID, type TextRequest, type ModelID } from "../schema/index.js"
 
 export const id = ProviderID.make("moonshotai")
 
@@ -59,7 +59,7 @@ const chatProtocol = Protocol.make({
   id: "moonshot-chat",
   body: {
     schema: Schema.Struct({ ...OpenAIChat.bodyFields, thinking: ChatOptions.fields.thinking }),
-    from: Effect.fn("Moonshot.chatFromRequest")(function* (request: LLMRequest) {
+    from: Effect.fn("Moonshot.chatFromRequest")(function* (request: TextRequest) {
       const options = yield* ProviderShared.validateWith(Schema.decodeUnknownEffect(ChatOptions))(
         request.providerOptions ?? {},
       )

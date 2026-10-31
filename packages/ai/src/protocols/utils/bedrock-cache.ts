@@ -1,5 +1,5 @@
 import { Schema } from "effect"
-import { CacheTTL, type CacheHint, type LLMRequest } from "../../schema/index.js"
+import { CacheTTL, type CacheHint, type TextRequest } from "../../schema/index.js"
 import { newBreakpoints } from "./cache.js"
 
 // Bedrock cache markers are positional: emit a `cachePoint` block immediately
@@ -28,7 +28,7 @@ const CLAUDE_5M = [
 // Callers share the four-breakpoint budget across system, messages, and tools.
 export const BEDROCK_BREAKPOINT_CAP = 4
 
-export const breakpoints = (model: LLMRequest["model"]) => {
+export const breakpoints = (model: TextRequest["model"]) => {
   // Substring matching also handles regional prefixes and model-bearing ARNs.
   const short = CLAUDE_5M.some((id) => model.id.includes(id))
   return {

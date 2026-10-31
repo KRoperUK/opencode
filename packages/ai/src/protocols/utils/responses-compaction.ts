@@ -5,7 +5,7 @@ import {
   CompactionPart,
   CompactionResponse,
   HttpOptions,
-  LLMRequest,
+  type TextRequest,
   Message,
   type ContentPart,
   mergeJsonRecords,
@@ -82,7 +82,7 @@ const Response = Schema.Struct({
 
 export const make = (
   adapter: OpenResponses.ProviderAdapter,
-  lowerTools: (request: LLMRequest) => Effect.Effect<ReadonlyArray<Record<string, unknown>>, AIError>,
+  lowerTools: (request: TextRequest) => Effect.Effect<ReadonlyArray<Record<string, unknown>>, AIError>,
 ): CompactOperation =>
   Effect.fn("ResponsesCompaction.execute")(function* (request, executor, options) {
     const route = request.model.route
@@ -108,9 +108,10 @@ export const make = (
     const url = Endpoint.render(route.endpoint, { request, body: native })
     url.pathname = `${url.pathname.replace(/\/$/, "")}/compact`
     const parts = yield* HttpTransport.jsonRequestParts({
-      request: LLMRequest.update(request, {
+      request: {
+        ...request,
         http: request.http === undefined ? undefined : new HttpOptions({ ...request.http, body: undefined }),
-      }),
+      },
       body,
       endpoint: Endpoint.path(url.toString()),
       auth: route.auth,
@@ -153,7 +154,7 @@ export const make = (
     })
   })
 
-function toMessage(item: (typeof Response.Type.output)[number], model: LLMRequest["model"]): Message {
+function toMessage(item: (typeof Response.Type.output)[number], model: TextRequest["model"]): Message {
   if (item.type === "compaction")
     return Message.assistant(
       CompactionPart.make({ provider: model.provider, id: item.id ?? undefined, encrypted: item.encrypted_content }),

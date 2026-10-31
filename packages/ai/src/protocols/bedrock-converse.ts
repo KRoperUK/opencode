@@ -10,7 +10,7 @@ import {
   type CacheHint,
   type FinishReason,
   type FinishReasonDetails,
-  type LLMRequest,
+  type TextRequest,
   type LanguageModel,
   type ProviderMetadata,
   type ProviderOptions,
@@ -279,7 +279,7 @@ const textWithCache = (
   return cachePoint ? [{ text }, cachePoint] : [{ text }]
 }
 
-const lowerToolChoice = (toolChoice: NonNullable<LLMRequest["toolChoice"]>) =>
+const lowerToolChoice = (toolChoice: NonNullable<TextRequest["toolChoice"]>) =>
   ProviderShared.matchToolChoice("Bedrock Converse", toolChoice, {
     auto: () => ({ auto: {} }) as const,
     none: () => undefined,
@@ -317,10 +317,7 @@ const lowerToolCall = (part: ToolCallPart, normalizeID: (id: string) => string):
   },
 })
 
-const lowerToolResultContent = Effect.fnUntraced(function* (
-  part: ToolResultPart,
-  documentNames: Set<string>,
-) {
+const lowerToolResultContent = Effect.fnUntraced(function* (part: ToolResultPart, documentNames: Set<string>) {
   if (part.result.type === "text" || part.result.type === "error")
     return [{ text: ProviderShared.toolResultText(part) }]
   if (part.result.type === "json") return [{ json: part.result.value }]
@@ -354,10 +351,7 @@ const lowerToolResult = Effect.fnUntraced(function* (
 // Keep Claude and Nova tool-result images inline; put other models' images beside the result.
 const keepToolImagesInline = (id: string) => id.includes("anthropic.claude-") || id.includes("amazon.nova-")
 
-const lowerMessages = Effect.fnUntraced(function* (
-  request: LLMRequest,
-  breakpoints: BedrockCache.Breakpoints,
-) {
+const lowerMessages = Effect.fnUntraced(function* (request: TextRequest, breakpoints: BedrockCache.Breakpoints) {
   const messages: BedrockMessage[] = []
   const documentNames = new Set<string>()
   // Mistral can reject replay IDs even when they satisfy Converse's broader ID syntax.
@@ -475,7 +469,7 @@ const lowerMessages = Effect.fnUntraced(function* (
 
 // System prompts share the cache-point convention: emit the text block, then
 // optionally a positional `cachePoint` marker.
-const lowerSystem = (breakpoints: BedrockCache.Breakpoints, system: ReadonlyArray<LLMRequest["system"][number]>) => {
+const lowerSystem = (breakpoints: BedrockCache.Breakpoints, system: ReadonlyArray<TextRequest["system"][number]>) => {
   const content = system
     .filter((part) => part.text.length > 0)
     .flatMap((part) => textWithCache(breakpoints, part.text, part.cache))
@@ -558,7 +552,7 @@ const isThinkingDisabled = Schema.is(
 
 // Claude 5.1+ binds each thinking signature to the prefix above it. Ask Bedrock to drop the affected blocks instead of
 // failing when that prefix changes. `http.body` overlays this field by field, so callers can still override it.
-const applyThinkingBindingDefault = (request: LLMRequest, thinking: Readonly<Record<string, unknown>> | undefined) => {
+const applyThinkingBindingDefault = (request: TextRequest, thinking: Readonly<Record<string, unknown>> | undefined) => {
   if (thinking?.type === "disabled" || isThinkingDisabled(request.http?.body)) return thinking
   if (!supportsThinkingBlockBinding(request.model)) return thinking
   return {
@@ -567,7 +561,7 @@ const applyThinkingBindingDefault = (request: LLMRequest, thinking: Readonly<Rec
   }
 }
 
-const fromRequest = Effect.fn("BedrockConverse.fromRequest")(function* (request: LLMRequest) {
+const fromRequest = Effect.fn("BedrockConverse.fromRequest")(function* (request: TextRequest) {
   const toolChoice = request.toolChoice ? yield* lowerToolChoice(request.toolChoice) : undefined
   const flattened = ProviderShared.flattenToolRequest(request)
   const generation = request.generation

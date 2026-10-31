@@ -1,6 +1,6 @@
 import { Effect, Schema } from "effect"
 import { Protocol } from "../route/protocol.js"
-import { CacheTTL, type LLMRequest } from "../schema/index.js"
+import { CacheTTL, type TextRequest } from "../schema/index.js"
 import { AnthropicMessages } from "./anthropic-messages.js"
 import { MetaResponses } from "./meta-responses.js"
 import { JsonObject, optionalArray, ProviderShared } from "./shared.js"
@@ -25,7 +25,7 @@ const Body = Schema.Struct({
   tools: optionalArray(Schema.Union([FunctionTool, WebSearch])),
 })
 
-const fromRequest = Effect.fn("MetaMessages.fromRequest")(function* (request: LLMRequest) {
+const fromRequest = Effect.fn("MetaMessages.fromRequest")(function* (request: TextRequest) {
   const projected = ProviderShared.flattenToolRequest(request)
   const body = yield* AnthropicMessages.protocol.body.from(projected.request)
   return {

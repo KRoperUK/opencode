@@ -10,7 +10,7 @@ import { MediaRoute } from "../route/media.js"
 import {
   ProviderConfigurationError,
   ProviderID,
-  type LLMRequest,
+  type TextRequest,
   type ModelID,
   type ProviderOptions,
 } from "../schema/index.js"
@@ -43,7 +43,7 @@ export type Settings = ProviderPackage.Settings &
     readonly project?: string
   }
 
-const fromRequest = Effect.fn("GoogleVertex.fromRequest")(function* (request: LLMRequest) {
+const fromRequest = Effect.fn("GoogleVertex.fromRequest")(function* (request: TextRequest) {
   const { serviceTier: _, ...body } = yield* Gemini.protocol.body.from(request)
   const value = request.providerOptions?.labels
   const labels = ProviderShared.isRecord(value)

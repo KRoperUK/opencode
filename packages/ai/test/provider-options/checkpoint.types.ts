@@ -5,7 +5,7 @@ import {
   CompactionResponse,
   LanguageModel,
   LLMClient,
-  LLMRequest,
+  type TextRequest,
 } from "../../src/effect.js"
 import {
   Anthropic,
@@ -51,8 +51,8 @@ for (const selected of [
 ]) {
   ai.compact(ai.request({ model: selected }), { mechanism: "trigger" })
 }
-ai.compact(new LLMRequest(LLMRequest.input(request)), { mechanism: "trigger" })
-ai.compact(LLMRequest.update(request, { messages: [] }), { mechanism: "trigger" })
+ai.compact({ ...request }, { mechanism: "trigger" })
+ai.compact({ ...request, messages: [] }, { mechanism: "trigger" })
 
 const azure = Azure.configure({ resourceName: "fixture" }).responses("fixture")
 const xai = XAI.configure().responses("fixture")
@@ -93,7 +93,7 @@ ai.compact(unsupported.xai, { mechanism: "trigger" })
 // @ts-expect-error Generic protocol compatibility does not grant trigger support.
 ai.compact(unsupported.compatible, { mechanism: "trigger" })
 // @ts-expect-error Changing the model replaces its capability.
-ai.compact(LLMRequest.update(request, { model: azure }), { mechanism: "trigger" })
+ai.compact({ ...request, model: azure }, { mechanism: "trigger" })
 ai.compact(ai.request({ model: LanguageModel.update(model, { route: azure.route }) }), {
   // @ts-expect-error Changing the route replaces its capability.
   mechanism: "trigger",
@@ -106,8 +106,8 @@ ai.compact(
   { mechanism: "trigger" },
 )
 
-declare const dynamic: LLMRequest
-declare const patch: Partial<LLMRequest.Input>
+declare const dynamic: TextRequest
+declare const patch: Partial<TextRequest>
 declare const routePatch: RoutePatch<OpenAIResponsesBody, Prepared>
 // @ts-expect-error A dynamic operation override cannot preserve trigger support.
 ai.compact(ai.request({ model: model.route.with(routePatch).model({ id: "fixture" }) }), {
@@ -129,7 +129,7 @@ if (ai.canCompact(dynamic)) {
   ai.compact(dynamic, { mechanism: "trigger" })
 }
 // @ts-expect-error A dynamic model override cannot preserve trigger support.
-ai.compact(LLMRequest.update(request, patch), { mechanism: "trigger" })
+ai.compact({ ...request, ...patch }, { mechanism: "trigger" })
 
 void AI.ai.compact(request).then((result) => result satisfies CompactionResponse)
 void AI.ai.compact(request, { mechanism: "trigger", webSocket, signal: AbortSignal.timeout(1) }).then((result) => {

@@ -207,7 +207,7 @@ export function build(
   }
 }
 
-/** The `ToolDefinition[]` that `LLMRequest.tools` expects, in array order. */
+/** The `ToolDefinition[]` that `TextRequest.tools` expects, in array order. */
 export const toDefinitions = (tools: ReadonlyArray<Tool>): ReadonlyArray<ToolDefinitionClass> =>
   tools.map((item) => item._definition)
 

@@ -8,7 +8,7 @@ import {
   ProviderInternalError,
   Usage,
   type FinishReason,
-  type LLMRequest,
+  type TextRequest,
   type MediaPart,
   type ProviderMetadata,
   type ReasoningPart,
@@ -430,7 +430,7 @@ export interface ProviderAdapter {
   readonly lowerMedia?: (input: {
     readonly part: MediaPart
     readonly media: Media.Inline | undefined
-    readonly request: LLMRequest
+    readonly request: TextRequest
   }) => MediaInput | undefined
   readonly restoreHostedToolItem?: (item: unknown) => HostedToolReplayItem | undefined
 }
@@ -438,7 +438,7 @@ export interface ProviderAdapter {
 const BASE_ADAPTER: ProviderAdapter = { id: ADAPTER, name: NAME }
 
 export interface ParserState {
-  readonly provider: LLMRequest["model"]["provider"]
+  readonly provider: TextRequest["model"]["provider"]
   readonly completedCompactions: ReadonlySet<string>
   readonly id: string
   readonly name: string
@@ -513,7 +513,7 @@ export const namedTool = (name: string, custom: ReadonlyMap<string, OpenAIFreefo
 
 export const lowerToolChoice = (
   protocolName: string,
-  toolChoice: NonNullable<LLMRequest["toolChoice"]>,
+  toolChoice: NonNullable<TextRequest["toolChoice"]>,
   custom: ReadonlyMap<string, OpenAIFreeform.Custom>,
 ) =>
   ProviderShared.matchToolChoice(protocolName, toolChoice, {
@@ -579,7 +579,7 @@ const lowerReasoning = (part: ReasoningPart, providerMetadataKey: string): OpenR
 const decodeImageDetail = ProviderShared.validateWith(Schema.decodeUnknownEffect(OpenResponsesInputImage.fields.detail))
 const decodeMessageMetadata = ProviderShared.validateWith(Schema.decodeUnknownEffect(MessageMetadata))
 
-const lowerMedia = Effect.fnUntraced(function* (part: MediaPart, request: LLMRequest, adapter: ProviderAdapter) {
+const lowerMedia = Effect.fnUntraced(function* (part: MediaPart, request: TextRequest, adapter: ProviderAdapter) {
   const media = part.media.inline()
   const providerMedia = adapter.lowerMedia?.({ part, media, request })
   if (providerMedia) return providerMedia
@@ -606,8 +606,8 @@ const lowerMedia = Effect.fnUntraced(function* (part: MediaPart, request: LLMReq
 })
 
 const lowerUserContent = Effect.fnUntraced(function* (
-  part: LLMRequest["messages"][number]["content"][number],
-  request: LLMRequest,
+  part: TextRequest["messages"][number]["content"][number],
+  request: TextRequest,
   adapter: ProviderAdapter,
 ) {
   if (part.type === "text") return { type: "input_text" as const, text: part.text }
@@ -619,7 +619,7 @@ const lowerUserContent = Effect.fnUntraced(function* (
 // content instead of JSON-stringifying base64 into a prompt string.
 const lowerToolResultContentItem = Effect.fnUntraced(function* (
   item: Content,
-  request: LLMRequest,
+  request: TextRequest,
   adapter: ProviderAdapter,
 ) {
   if (item.type === "text") return { type: "input_text" as const, text: item.text }
@@ -628,7 +628,7 @@ const lowerToolResultContentItem = Effect.fnUntraced(function* (
 
 const lowerToolResultOutput = Effect.fnUntraced(function* (
   part: ToolResultPart,
-  request: LLMRequest,
+  request: TextRequest,
   adapter: ProviderAdapter,
 ) {
   // Text/json/error results are encoded as a plain string for backward
@@ -641,10 +641,7 @@ const lowerToolResultOutput = Effect.fnUntraced(function* (
 
 const DEFAULT_EFFORT = "medium"
 
-const lowerMessages = Effect.fnUntraced(function* (
-  request: LLMRequest,
-  adapter: ProviderAdapter,
-) {
+const lowerMessages = Effect.fnUntraced(function* (request: TextRequest, adapter: ProviderAdapter) {
   const input: OpenResponsesInputItem[] = []
   const providerMetadataKey = metadataKey(request.model)
   const custom = OpenAIFreeform.tools(request)
@@ -807,10 +804,7 @@ const lowerMessages = Effect.fnUntraced(function* (
   return input
 })
 
-export const lowerConversation = Effect.fnUntraced(function* (
-  request: LLMRequest,
-  adapter: ProviderAdapter,
-) {
+export const lowerConversation = Effect.fnUntraced(function* (request: TextRequest, adapter: ProviderAdapter) {
   const instructions = ProviderShared.joinText(request.system)
   return {
     model: request.model.id,
@@ -819,7 +813,7 @@ export const lowerConversation = Effect.fnUntraced(function* (
   }
 })
 
-export const lowerGeneration = (request: LLMRequest, options = OpenResponsesOptions.resolve(request)) => {
+export const lowerGeneration = (request: TextRequest, options = OpenResponsesOptions.resolve(request)) => {
   const generation = request.generation
   const cacheKey = ProviderShared.promptCacheKey(request)
   const parallelToolCalls = resolveParallelToolCalls(request, options)
@@ -850,7 +844,7 @@ export const lowerGeneration = (request: LLMRequest, options = OpenResponsesOpti
   }
 }
 
-export const resolveParallelToolCalls = (request: LLMRequest, options = OpenResponsesOptions.resolve(request)) => {
+export const resolveParallelToolCalls = (request: TextRequest, options = OpenResponsesOptions.resolve(request)) => {
   const configured = options.parallelToolCalls
   if (configured !== undefined) return configured
   const disabled = request.toolChoice?.disableParallelToolUse
@@ -871,7 +865,7 @@ export const allowedToolChoice = (
 }
 
 export const fromRequestWithAdapter = Effect.fn("OpenResponses.fromRequestWithAdapter")(function* (
-  request: LLMRequest,
+  request: TextRequest,
   adapter: ProviderAdapter,
 ) {
   const projected = ProviderShared.flattenToolRequest(request)
@@ -887,7 +881,7 @@ export const fromRequestWithAdapter = Effect.fn("OpenResponses.fromRequestWithAd
   }
 })
 
-export const fromRequest = (request: LLMRequest) => fromRequestWithAdapter(request, BASE_ADAPTER)
+export const fromRequest = (request: TextRequest) => fromRequestWithAdapter(request, BASE_ADAPTER)
 
 // =============================================================================
 // Stream Parsing
@@ -927,7 +921,7 @@ const mapFinishReason = (event: Event, hasFunctionCall: boolean): FinishReason =
   return hasFunctionCall ? "tool-calls" : "unknown"
 }
 
-export const metadataKey = (model: LLMRequest["model"]) => model.route.providerMetadataKey ?? "openresponses"
+export const metadataKey = (model: TextRequest["model"]) => model.route.providerMetadataKey ?? "openresponses"
 
 export const providerMetadata = (state: ParserState, metadata: Record<string, unknown>): ProviderMetadata => ({
   [state.providerMetadataKey]: metadata,
@@ -1205,10 +1199,7 @@ const onReasoningSummaryPartDone = (state: ParserState, event: Event): StepResul
   ]
 }
 
-const onFunctionCallArgumentsDelta = Effect.fnUntraced(function* (
-  state: ParserState,
-  event: Event,
-) {
+const onFunctionCallArgumentsDelta = Effect.fnUntraced(function* (state: ParserState, event: Event) {
   if (event.item_id === undefined) return [state, NO_EVENTS] satisfies StepResult
   const tool = state.tools[event.item_id]
   if (!tool) return [state, NO_EVENTS] satisfies StepResult
@@ -1236,10 +1227,7 @@ const onFunctionCallArgumentsDelta = Effect.fnUntraced(function* (
   return [{ ...state, lifecycle, tools: result.tools }, events] satisfies StepResult
 })
 
-const onOutputItemDone = Effect.fnUntraced(function* (
-  state: ParserState,
-  item: NormalizedEvent["item"],
-) {
+const onOutputItemDone = Effect.fnUntraced(function* (state: ParserState, item: NormalizedEvent["item"]) {
   if (!item) return [state, NO_EVENTS] satisfies StepResult
 
   if (item.type === "compaction") {
@@ -1540,7 +1528,7 @@ export const step = (state: ParserState, event: NormalizedEvent) => {
  * The provider-neutral Open Responses protocol. Provider-specific Responses
  * implementations compose this baseline with their own tools and event variants.
  */
-export const initial = (request: LLMRequest, adapter: ProviderAdapter = BASE_ADAPTER): ParserState => ({
+export const initial = (request: TextRequest, adapter: ProviderAdapter = BASE_ADAPTER): ParserState => ({
   provider: request.model.provider,
   completedCompactions: new Set<string>(),
   id: adapter.id,

@@ -1,11 +1,11 @@
-import type { LLMRequest } from "../schema/index.js"
+import type { TextRequest } from "../schema/index.js"
 
-export interface EndpointInput<Body, Request = LLMRequest> {
+export interface EndpointInput<Body, Request = TextRequest> {
   readonly request: Request
   readonly body: Body
 }
 
-export type EndpointPart<Body, Request = LLMRequest> = string | ((input: EndpointInput<Body, Request>) => string)
+export type EndpointPart<Body, Request = TextRequest> = string | ((input: EndpointInput<Body, Request>) => string)
 
 /**
  * Declarative URL construction for one route.
@@ -18,16 +18,16 @@ export type EndpointPart<Body, Request = LLMRequest> = string | ((input: Endpoin
  * URL embeds the model id, region, or another body field (e.g. Bedrock,
  * Gemini). Media routes reuse the same shape with their own request type.
  */
-export interface Definition<Body, Request = LLMRequest> {
+export interface Definition<Body, Request = TextRequest> {
   readonly baseURL?: string
   readonly path: EndpointPart<Body, Request>
   readonly query?: Record<string, string>
 }
 
-export type EndpointPatch<Body, Request = LLMRequest> = Partial<Definition<Body, Request>>
+export type EndpointPatch<Body, Request = TextRequest> = Partial<Definition<Body, Request>>
 
 /** Construct an `Endpoint` from a path string or path function. */
-export const path = <Body, Request = LLMRequest>(
+export const path = <Body, Request = TextRequest>(
   value: EndpointPart<Body, Request>,
   options: Omit<Definition<Body, Request>, "path"> = {},
 ): Definition<Body, Request> => ({
@@ -35,7 +35,7 @@ export const path = <Body, Request = LLMRequest>(
   path: value,
 })
 
-export const merge = <Body, Request = LLMRequest>(
+export const merge = <Body, Request = TextRequest>(
   base: Definition<Body, Request>,
   patch: EndpointPatch<Body, Request>,
 ): Definition<Body, Request> => ({
@@ -51,7 +51,7 @@ export const trimBaseUrl = (value: string) => value.replace(/\/+$/, "")
 const renderPart = <Body, Request>(part: EndpointPart<Body, Request>, input: EndpointInput<Body, Request>) =>
   typeof part === "function" ? part(input) : part
 
-export const render = <Body, Request = LLMRequest>(
+export const render = <Body, Request = TextRequest>(
   endpoint: Definition<Body, Request>,
   input: EndpointInput<Body, Request>,
 ) => {

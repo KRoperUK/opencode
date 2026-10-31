@@ -3,7 +3,7 @@ import { Endpoint } from "../endpoint.js"
 import { Auth } from "../auth.js"
 import type { HttpMiddleware, Interface as RequestExecutorInterface } from "../executor.js"
 import type { WebSocketChannelExecutor } from "./websocket-channel.js"
-import type { AIError, HttpContext, LLMRequest } from "../../schema/index.js"
+import type { AIError, HttpContext, TextRequest } from "../../schema/index.js"
 
 export interface TransportRuntime {
   readonly http: RequestExecutorInterface
@@ -27,7 +27,7 @@ export interface Transport<Body, Prepared, Frame> {
   readonly prepare: (input: TransportPrepareInput<Body>) => Effect.Effect<Prepared, AIError>
   readonly execute: (
     prepared: Prepared,
-    request: LLMRequest,
+    request: TextRequest,
     runtime: TransportRuntime,
     options?: TransportExecuteOptions,
   ) => Effect.Effect<TransportExecution<Frame>, AIError, Scope.Scope>
@@ -35,11 +35,11 @@ export interface Transport<Body, Prepared, Frame> {
 
 export interface TransportPrepareInput<Body> {
   readonly body: Body
-  readonly request: LLMRequest
+  readonly request: TextRequest
   readonly endpoint: Endpoint.Definition<Body>
   readonly auth: Auth.Definition
   readonly encodeBody: (body: Body) => string
-  readonly headers?: (input: { readonly request: LLMRequest }) => Record<string, string>
+  readonly headers?: (input: { readonly request: TextRequest }) => Record<string, string>
   readonly middleware?: HttpMiddleware
   readonly webSocket?: WebSocketChannelExecutor
 }

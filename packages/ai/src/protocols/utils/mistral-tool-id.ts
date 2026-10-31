@@ -1,4 +1,4 @@
-import type { LLMRequest } from "../../schema/index.js"
+import type { TextRequest } from "../../schema/index.js"
 
 export const valid = /^[A-Za-z0-9]{9}$/
 
@@ -11,7 +11,7 @@ export const hash = (value: string) => {
   return `${hash(2166136261).padStart(7, "0")}${hash(2246822519).padStart(7, "0")}`.slice(-9)
 }
 
-export const normalizer = (request: LLMRequest) => {
+export const normalizer = (request: TextRequest) => {
   const ids = request.messages.flatMap((message) =>
     message.content.flatMap((part) => (part.type === "tool-call" || part.type === "tool-result" ? [part.id] : [])),
   )

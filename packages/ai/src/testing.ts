@@ -15,7 +15,7 @@ import {
   CompactionCheckpointResponse,
   type FinishReasonDetails,
   type AIError,
-  type LLMRequest,
+  type TextRequest,
   type ProviderMetadata,
   type UsageInput,
 } from "./schema/index.js"
@@ -31,11 +31,11 @@ export type Gate = Readonly<{ started: Effect.Effect<void>; release: Effect.Effe
 
 type ClientInterface = Context.Service.Shape<typeof LLMClient.Service>
 
-export type Responder = (request: LLMRequest) => Response
+export type Responder = (request: TextRequest) => Response
 
 interface Controls {
   /** Returns a snapshot of requests observed at execution time. */
-  readonly requests: () => Effect.Effect<readonly LLMRequest[]>
+  readonly requests: () => Effect.Effect<readonly TextRequest[]>
   readonly push: (...responses: readonly Response[]) => Effect.Effect<void>
   /** Replaces the fallback without changing queued responses. */
   readonly always: (response: Response) => Effect.Effect<void>
@@ -51,7 +51,7 @@ export interface TestInterface extends ClientInterface, Controls {}
 export class Test extends Context.Service<Test, TestInterface>()("@opencode/ai/TestLLM/Test") {}
 
 export interface LayerOptions {
-  readonly transformRequest?: (request: LLMRequest) => LLMRequest
+  readonly transformRequest?: (request: TextRequest) => TextRequest
   /** Used after the one-shot response queue is exhausted. Omit to defect on unexpected requests. */
   readonly fallback?: Response
 }
@@ -115,15 +115,15 @@ const make = (options: LayerOptions) =>
         ),
       )
     function compact(
-      request: CompactionRequest,
+      request: TextRequest & Pick<CompactionRequest, "model">,
       options?: EndpointCompactOptions,
     ): Effect.Effect<CompactionResponse, AIError>
     function compact(
-      request: CheckpointRequest,
+      request: TextRequest & Pick<CheckpointRequest, "model">,
       options: TriggerCompactOptions,
     ): Effect.Effect<CompactionCheckpointResponse, AIError>
     function compact(
-      request: LLMRequest,
+      request: TextRequest,
       options?: EndpointCompactOptions | TriggerCompactOptions,
     ): Effect.Effect<CompactionResponse | CompactionCheckpointResponse, AIError> {
       return script.take(request).pipe(
@@ -154,7 +154,7 @@ export const testLayer = (options: LayerOptions = {}) =>
 
 /** The response queue, fallback, request log, and gates behind the test controls. */
 const makeScript = (options: LayerOptions) => {
-  const requests: LLMRequest[] = []
+  const requests: TextRequest[] = []
   const responses: Response[] = []
   let started = Deferred.makeUnsafe<void>()
   const initial = options.fallback
@@ -165,7 +165,7 @@ const makeScript = (options: LayerOptions) => {
       requests.length >= count ? Effect.void : Deferred.await(started).pipe(Effect.andThen(wait(count))),
     )
 
-  const take = (request: LLMRequest) =>
+  const take = (request: TextRequest) =>
     Effect.suspend(() => {
       const count = requests.push(options.transformRequest?.(request) ?? request)
       const waiting = started
