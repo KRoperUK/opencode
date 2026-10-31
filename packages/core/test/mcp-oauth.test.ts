@@ -1,12 +1,25 @@
 import { afterAll, describe, expect, test } from "bun:test"
-import { auth, refreshAuthorization } from "@modelcontextprotocol/client"
+import { createHash } from "node:crypto"
+import { auth } from "@modelcontextprotocol/client"
+import { createMcpHandler, Server } from "@modelcontextprotocol/server"
 import { ConfigMCP } from "@opencode/schema/config/mcp"
+import { Bus } from "@opencode/core/bus"
+import { Config } from "@opencode/core/config"
 import { Credential } from "@opencode/core/credential"
+import { AppNodeBuilder } from "@opencode/core/effect/app-node-builder"
+import { Environment } from "@opencode/core/environment/index"
+import { Form } from "@opencode/core/form"
 import { Integration } from "@opencode/core/integration"
+import { Location } from "@opencode/core/location"
+import { Mcp } from "@opencode/core/mcp/index"
 import { McpClient } from "@opencode/core/mcp/client"
 import { McpOAuth } from "@opencode/core/mcp/oauth"
-import { Cause, Effect, Exit } from "effect"
+import { AbsolutePath } from "@opencode/core/schema"
+import { LayerNode } from "@opencode/util/effect/layer-node"
+import { Cause, Context, Effect, Exit, Fiber, Layer, Schedule } from "effect"
 import { hostEnvironmentLayer } from "./fixture/environment"
+import { location } from "./fixture/location"
+import { testEffect } from "./lib/effect"
 
 const authServer = Bun.serve({ port: 0, fetch: () => new Response(null, { status: 404 }) })
 afterAll(() => authServer.stop(true))
@@ -37,7 +50,7 @@ const memoryCredentials = (initial: Credential.Info[]) => {
   const rows = new Map(initial.map((row) => [row.id, row]))
   const unused = () => Effect.die("unused credential method")
   const service = Credential.Service.of({
-    lock: unused,
+    lock: (_id, operation) => operation,
     all: unused,
     create: unused,
     activate: unused,
@@ -240,7 +253,9 @@ describe("MCP OAuth", () => {
     const store = memoryCredentials([credential({ access: "expired", refresh: "refresh", url: server.url.href })])
     const oauthProvider = await connectProvider(remote(server.url.href), store)
 
-    const result = await auth(oauthProvider, { serverUrl: server.url.href }).finally(() => server.stop(true))
+    const result = await auth(oauthProvider, { serverUrl: server.url.href, fetchFn: oauthProvider.send }).finally(() =>
+      server.stop(true),
+    )
 
     expect(result).toBe("AUTHORIZED")
     expect(tokenRequests).toHaveLength(1)
@@ -279,67 +294,6 @@ describe("MCP OAuth", () => {
       `MCP server "${config.url}" requires a login before it can register a client`,
     )
     expect(registrations).toBe(0)
-  })
-
-  test("drops an invalidated credential only while it still holds the presented token", async () => {
-    const url = authServer.url.href
-    const rotated = memoryCredentials([credential({ access: "a", refresh: "r1", url })])
-    const rotatedProvider = await connectProvider(remote(url), rotated)
-    await rotatedProvider.tokens()
-    // Another connection refreshed first; the row now holds a token this provider never presented.
-    await Effect.runPromise(
-      rotated.service.update(Credential.ID.make("cred_test"), {
-        value: credential({ access: "b", refresh: "r2", url }).value,
-      }),
-    )
-    await rotatedProvider.invalidateCredentials?.("tokens")
-    expect(rotated.rows.size).toBe(1)
-
-    const stale = memoryCredentials([credential({ access: "a", refresh: "r1", url })])
-    const staleProvider = await connectProvider(remote(url), stale)
-    await staleProvider.tokens()
-    await staleProvider.invalidateCredentials?.("tokens")
-    expect(stale.rows.size).toBe(0)
-  })
-
-  test("shares concurrent refreshes for the same token", async () => {
-    let requests = 0
-    const pending = Promise.withResolvers<void>()
-    const server = Bun.serve({
-      port: 0,
-      async fetch(request) {
-        const body = new URLSearchParams(await request.text())
-        if (body.get("grant_type") !== "refresh_token") return new Response(null, { status: 404 })
-        requests++
-        await pending.promise
-        return Response.json({ access_token: "access", token_type: "Bearer", refresh_token: "next" })
-      },
-    })
-    const fetchFn = await Effect.runPromise(McpOAuth.loggedFetch({ server: "test" }))
-    const options = {
-      metadata: {
-        issuer: server.url.origin,
-        authorization_endpoint: `${server.url.origin}/authorize`,
-        token_endpoint: `${server.url.origin}/token`,
-        response_types_supported: ["code"],
-      },
-      clientInformation: { client_id: "client" },
-      refreshToken: "refresh",
-      fetchFn,
-    }
-
-    const first = refreshAuthorization(new URL(server.url.origin), options)
-    const second = refreshAuthorization(new URL(server.url.origin), options)
-    // Both refreshes must reach the token endpoint before the shared response is released.
-    await new Promise((resolve) => setTimeout(resolve, 50))
-
-    expect(requests).toBe(1)
-    pending.resolve()
-    const results = await Promise.all([first, second]).finally(() => server.stop(true))
-    expect(results).toEqual([
-      { access_token: "access", token_type: "Bearer", refresh_token: "next" },
-      { access_token: "access", token_type: "Bearer", refresh_token: "next" },
-    ])
   })
 
   test("generates a loopback redirect URL when none is configured", async () => {
@@ -584,4 +538,233 @@ describe("MCP OAuth", () => {
       expect(registrations).toHaveLength(1)
     })
   })
+})
+
+const it = testEffect(
+  AppNodeBuilder.build(
+    LayerNode.group([
+      Config.node,
+      Bus.node,
+      Integration.node,
+      Credential.node,
+      Form.node,
+      Environment.node,
+      Location.node,
+    ]),
+    [
+      Location.node.replace(
+        Layer.succeed(
+          Location.Service,
+          Location.Service.of(location({ directory: AbsolutePath.make(import.meta.dir) })),
+        ),
+      ),
+      Environment.node.replace(hostEnvironmentLayer),
+    ],
+  ),
+)
+
+// An OAuth-protected MCP server whose refresh tokens are single-use: replaying one returns invalid_grant.
+// With hold, every 401 after the first waits until the first refresh was answered.
+const rotatingServer = Effect.fnUntraced(function* (input: { readonly refresh: string; readonly hold?: boolean }) {
+  const counts = { refresh: 0, invalidGrant: 0 }
+  const state = { current: input.refresh, access: new Set<string>(), refreshed: Promise.withResolvers<void>() }
+  let rejections = 0
+  const handler = createMcpHandler(() => {
+    const protocol = new Server({ name: "mock", version: "1.0.0" }, { capabilities: { tools: {} } })
+    protocol.setRequestHandler("tools/list", () =>
+      Promise.resolve({ tools: [{ name: "echo", inputSchema: { type: "object" as const, properties: {} } }] }),
+    )
+    protocol.setRequestHandler("tools/call", () =>
+      Promise.resolve({ content: [{ type: "text" as const, text: "ok" }] }),
+    )
+    return protocol
+  })
+  const server = Bun.serve({
+    port: 0,
+    async fetch(request) {
+      const url = new URL(request.url)
+      if (url.pathname.startsWith("/.well-known/oauth-protected-resource"))
+        return Response.json({ resource: `${url.origin}/mcp`, authorization_servers: [url.origin] })
+      if (url.pathname.startsWith("/.well-known/oauth-authorization-server"))
+        return Response.json({
+          issuer: url.origin,
+          authorization_endpoint: `${url.origin}/authorize`,
+          token_endpoint: `${url.origin}/token`,
+          response_types_supported: ["code"],
+          grant_types_supported: ["authorization_code", "refresh_token"],
+        })
+      if (url.pathname === "/token") {
+        const body = new URLSearchParams(await request.text())
+        counts.refresh++
+        state.refreshed.resolve()
+        if (body.get("refresh_token") !== state.current) {
+          counts.invalidGrant++
+          return Response.json({ error: "invalid_grant", error_description: "refresh token reused" }, { status: 400 })
+        }
+        state.current = `rt${counts.refresh}`
+        const access = `at${counts.refresh}`
+        state.access.add(access)
+        return Response.json({
+          access_token: access,
+          token_type: "Bearer",
+          refresh_token: state.current,
+          expires_in: 3600,
+        })
+      }
+      if (url.pathname !== "/mcp") return new Response(null, { status: 404 })
+      if (!state.access.has((request.headers.get("authorization") ?? "").replace(/^Bearer /, ""))) {
+        if (input.hold && rejections++ > 0) await state.refreshed.promise
+        return new Response(null, {
+          status: 401,
+          headers: {
+            "www-authenticate": `Bearer resource_metadata="${url.origin}/.well-known/oauth-protected-resource"`,
+          },
+        })
+      }
+      return handler.fetch(request)
+    },
+  })
+  yield* Effect.addFinalizer(() => Effect.promise(() => server.stop(true)))
+  return { url: `${server.url.origin}/mcp`, counts, state }
+})
+
+const rotatingConfig = (url: string) =>
+  new ConfigMCP.Remote({ type: "remote", url, oauth: { client_id: "client" }, codemode: false })
+
+const saveCredential = Effect.fnUntraced(function* (input: {
+  readonly integrationID: Integration.ID
+  readonly url: string
+  readonly access: string
+  readonly refresh: string
+  readonly expires?: number
+}) {
+  const credentials = yield* Credential.Service
+  return yield* credentials.create({
+    integrationID: input.integrationID,
+    value: Credential.OAuth.make({
+      type: "oauth",
+      methodID,
+      access: input.access,
+      refresh: input.refresh,
+      expires: input.expires ?? Date.now() - 1000,
+      metadata: { serverUrl: input.url, tokenType: "Bearer" },
+    }),
+  })
+})
+
+// Each connection gets its own provider over the shared credential, like Locations or processes do. A
+// slow save stands in for SQLite contention during a boot burst.
+const connectAll = Effect.fnUntraced(function* (input: {
+  readonly config: typeof ConfigMCP.Remote.Type
+  readonly integrationID: Integration.ID
+  readonly count: number
+  readonly saveDelay?: number
+}) {
+  const credentials = yield* Credential.Service
+  const slow = Credential.Service.of({
+    ...credentials,
+    update: (id, updates) => Effect.sleep(input.saveDelay ?? 0).pipe(Effect.andThen(credentials.update(id, updates))),
+  })
+  return yield* Effect.forEach(
+    Array.from({ length: input.count }),
+    () =>
+      McpOAuth.connectProvider({ config: input.config, integrationID: input.integrationID }).pipe(
+        Effect.flatMap((provider) => McpClient.connect("test", input.config, import.meta.dir, provider)),
+        Effect.provideService(Credential.Service, slow),
+        Effect.provide(hostEnvironmentLayer),
+        Effect.exit,
+      ),
+    { concurrency: "unbounded" },
+  )
+})
+
+describe("MCP OAuth refresh lock", () => {
+  for (const saveDelay of [0, 50])
+    it.live(`refreshes an expired credential once for 10 connections (save +${saveDelay} ms)`, () =>
+      Effect.gen(function* () {
+        // Later connections' 401s land right after the refresh response, while it is still being saved.
+        const server = yield* rotatingServer({ refresh: "rt0", hold: true })
+        const integrationID = Integration.ID.make(`mcp_burst_${saveDelay}`)
+        const saved = yield* saveCredential({ integrationID, url: server.url, access: "expired", refresh: "rt0" })
+        const config = rotatingConfig(server.url)
+
+        const exits = yield* connectAll({ config, integrationID, count: 10, saveDelay })
+
+        expect(exits.filter(Exit.isSuccess)).toHaveLength(10)
+        expect(server.counts).toEqual({ refresh: 1, invalidGrant: 0 })
+        const credentials = yield* Credential.Service
+        const stored = (yield* credentials.get(saved.id))?.value
+        expect(stored?.type === "oauth" && stored.refresh).toBe(server.state.current)
+      }),
+    )
+
+  it.live("refreshes a token revoked mid-session once across connections", () =>
+    Effect.gen(function* () {
+      const server = yield* rotatingServer({ refresh: "rt0" })
+      server.state.access.add("at0")
+      const integrationID = Integration.ID.make("mcp_live_401")
+      // The saved token has an hour left, so only the server's 401 says it needs a refresh.
+      const saved = yield* saveCredential({
+        integrationID,
+        url: server.url,
+        access: "at0",
+        refresh: "rt0",
+        expires: Date.now() + 3_600_000,
+      })
+      const config = rotatingConfig(server.url)
+      const [first, second] = yield* connectAll({ config, integrationID, count: 2, saveDelay: 50 })
+      if (!first || !second || Exit.isFailure(first) || Exit.isFailure(second)) throw new Error("connect failed")
+      expect(server.counts.refresh).toBe(0)
+
+      // The server revokes the access token; the second call's 401 lands while the first refresh is still saving.
+      server.state.access.clear()
+      const call = (connection: McpClient.Connection) => connection.callTool({ name: "echo" })
+      const one = yield* call(first.value).pipe(Effect.forkScoped)
+      yield* Effect.promise(() => server.state.refreshed.promise)
+      const two = yield* call(second.value).pipe(Effect.forkScoped)
+
+      expect(yield* Fiber.join(one)).toMatchObject({ content: [{ type: "text", text: "ok" }] })
+      expect(yield* Fiber.join(two)).toMatchObject({ content: [{ type: "text", text: "ok" }] })
+      expect(server.counts).toEqual({ refresh: 1, invalidGrant: 0 })
+      const credentials = yield* Credential.Service
+      const stored = (yield* credentials.get(saved.id))?.value
+      expect(stored?.type === "oauth" && stored.refresh).toBe(server.state.current)
+    }),
+  )
+
+  it.live("keeps a rejected credential and asks for sign-in", () =>
+    Effect.gen(function* () {
+      const server = yield* rotatingServer({ refresh: "rt0" })
+      server.state.access.add("at0")
+      const credentials = yield* Credential.Service
+      const saved = yield* saveCredential({
+        integrationID: Integration.ID.make(
+          "mcp_" + createHash("sha1").update(`revoked\u0000${server.url}`).digest("hex").slice(0, 16),
+        ),
+        url: server.url,
+        access: "at0",
+        refresh: "rt0",
+      })
+      const service = Context.get(yield* Layer.build(Mcp.layer()), Mcp.Service)
+      yield* service.transform((editor) => editor.set("revoked", rotatingConfig(server.url)))
+      const status = (expected: string) =>
+        Effect.gen(function* () {
+          const current = (yield* service.servers()).find((server) => server.name === "revoked")?.status
+          if (current?.status !== expected) return yield* Effect.fail(current)
+        }).pipe(Effect.retry(Schedule.spaced("5 millis")), Effect.timeout("10 seconds"))
+      yield* status("connected")
+
+      // The server revokes the whole grant while connected, then again on a fresh connect.
+      server.state.current = "revoked"
+      server.state.access.clear()
+      expect(Exit.isFailure(yield* service.callTool({ server: "revoked", name: "echo" }).pipe(Effect.exit))).toBe(true)
+      yield* status("needs_auth")
+      yield* service.connect("revoked")
+      yield* status("needs_auth")
+
+      // One rejected refresh per attempt, and the saved credential is untouched.
+      expect(server.counts).toEqual({ refresh: 2, invalidGrant: 2 })
+      expect(yield* credentials.get(saved.id)).toEqual(saved)
+    }),
+  )
 })
