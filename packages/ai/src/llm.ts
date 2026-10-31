@@ -15,7 +15,6 @@ import {
   type Finish,
   ToolChoice,
   ToolEntry,
-  type ContentPart,
   type LanguageModelProviderOptions,
   type ToolEntryInput,
   withPartial,
@@ -30,7 +29,7 @@ export type RequestInput<SelectedLanguageModel extends LanguageModel = LanguageM
 > & {
   readonly model: SelectedLanguageModel
   readonly system?: string | SystemPart | ReadonlyArray<SystemPart>
-  readonly prompt?: string | ContentPart | ReadonlyArray<ContentPart>
+  readonly prompt?: Message.ContentInput
   readonly messages?: ReadonlyArray<Message | Message.Input>
   /** Sent in array order. Pass `tool(...)` values or wire entries such as hosted provider tools. */
   readonly tools?: ReadonlyArray<Tool | ToolEntryInput>

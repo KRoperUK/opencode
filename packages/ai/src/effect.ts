@@ -120,10 +120,12 @@ export {
   AIError,
 } from "./schema/index.js"
 export type {
+  ContentPartInput,
   GenerationOptionsFields,
   GenerationOptionsInput,
   LanguageModelInput,
   LanguageModelProviderOptions,
+  MediaPartInput,
   ToolDefinitionInput,
   ToolNamespaceInput,
   ToolNamespaceEntryInput,
@@ -167,8 +169,10 @@ export type {
   AnswerFor,
   AnswersFor,
   DecisionInput,
+  DecisionMediaPartInput,
   DecisionModelOptions,
   DecisionOptions,
+  DecisionPartInput,
   DecisionQuestions,
   DecisionRequestFor,
   DecisionRequestInput,

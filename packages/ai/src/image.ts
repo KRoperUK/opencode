@@ -84,9 +84,11 @@ export type ImageModelOptions<Model> = Model extends ImageModel<infer Options> ?
 
 export type ImageRequestInput<Model extends ImageModel = ImageModel> = Omit<
   ConstructorParameters<typeof ImageRequest>[0],
-  "model" | "providerOptions" | "http" | "resolution"
+  "model" | "images" | "providerOptions" | "http" | "resolution"
 > & {
   readonly model: Model
+  /** Edit sources or style/subject references, in order: assets or plain data with a detectable type. */
+  readonly images?: ReadonlyArray<Media.Input>
   readonly resolution?: ImageResolution
   readonly providerOptions?: NoInfer<ImageModelOptions<Model>>
   readonly http?: HttpOptions.Input
@@ -168,6 +170,7 @@ export function request(input: ImageRequest | ImageRequestInput) {
   if (input instanceof ImageRequest) return input
   return new ImageRequest({
     ...input,
+    images: input.images?.map((image) => Media.make(image)),
     http: HttpOptions.make(input.http),
   })
 }
