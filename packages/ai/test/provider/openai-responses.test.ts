@@ -27,10 +27,10 @@ import {
   type WebSocketChannelDriver,
 } from "../../src/route.js"
 import { compileRequest } from "../../src/route/client.js"
-import * as Azure from "../../src/providers/azure.js"
-import * as OpenAI from "../../src/providers/openai.js"
-import * as XAI from "../../src/providers/xai.js"
-import { Meta } from "../../src/providers/meta.js"
+import { azure } from "../../src/providers/azure.js"
+import { openai } from "../../src/providers/openai.js"
+import { xai } from "../../src/providers/xai.js"
+import { meta } from "../../src/providers/meta.js"
 import { OpenAICompatibleResponses } from "../../src/protocols/openai-compatible-responses.js"
 import * as OpenAIResponses from "../../src/protocols/openai-responses.js"
 import { OpenResponses } from "../../src/protocols/open-responses.js"
@@ -45,7 +45,7 @@ const model = OpenAIResponses.route
   .with({ endpoint: { baseURL: "https://api.openai.test/v1/" }, auth: Auth.bearer("test") })
   .model({ id: "gpt-4.1-mini" })
 
-const xaiModel = XAI.configure({ apiKey: "test", baseURL: "https://api.x.ai/v1" }).responses("grok-4.5")
+const xaiModel = xai.configure({ apiKey: "test", baseURL: "https://api.x.ai/v1" }).responses("grok-4.5")
 
 const baseChannelDriver = (message: string): WebSocketChannelDriver => ({
   create: () => Effect.succeed({ message, mode: "full" }),
@@ -161,7 +161,7 @@ describe("OpenAI Responses route", () => {
         ai.request({
           model,
           prompt: "Show me a rooftop garden.",
-          tools: [OpenAI.imageGeneration({ action: "generate", quality: "high", size: "1024x1024" })],
+          tools: [openai.imageGeneration({ action: "generate", quality: "high", size: "1024x1024" })],
           toolChoice: "image_generation",
         }),
       )
@@ -287,7 +287,7 @@ describe("OpenAI Responses route", () => {
         ai.request({
           model,
           prompt: "Show me a rooftop garden.",
-          tools: [OpenAI.imageGeneration({ outputCompression: -1, partialImages: 4, size: "bogus" })],
+          tools: [openai.imageGeneration({ outputCompression: -1, partialImages: 4, size: "bogus" })],
         }),
       ).pipe(Effect.flip)
 
@@ -520,11 +520,13 @@ describe("OpenAI Responses route", () => {
       })
       const response = yield* LLMClient.generate(
         ai.request({
-          model: OpenAI.configure({
-            baseURL: "https://api.openai.test/v1/",
-            apiKey: "test",
-            headers: { "openai-beta": "custom-protocol" },
-          }).responses("gpt-4.1-mini"),
+          model: openai
+            .configure({
+              baseURL: "https://api.openai.test/v1/",
+              apiKey: "test",
+              headers: { "openai-beta": "custom-protocol" },
+            })
+            .responses("gpt-4.1-mini"),
           prompt: "Say hello.",
         }),
         { webSocket },
@@ -574,9 +576,9 @@ describe("OpenAI Responses route", () => {
         RequestExecutor.Service,
         RequestExecutor.Service.of({ execute: () => Effect.die("unexpected HTTP request") }),
       )
-      const model = OpenAI.configure({ baseURL: "https://api.openai.test/v1/", apiKey: "test" }).responses(
-        "gpt-4.1-mini",
-      )
+      const model = openai
+        .configure({ baseURL: "https://api.openai.test/v1/", apiKey: "test" })
+        .responses("gpt-4.1-mini")
 
       const errors = yield* Effect.forEach(["late", "mismatch"], (prompt) =>
         LLMClient.generate(ai.request({ model, prompt }), { webSocket }).pipe(
@@ -613,9 +615,9 @@ describe("OpenAI Responses route", () => {
         RequestExecutor.Service,
         RequestExecutor.Service.of({ execute: () => Effect.die("unexpected HTTP request") }),
       )
-      const model = OpenAI.configure({ baseURL: "https://api.openai.test/v1/", apiKey: "test" }).responses(
-        "gpt-4.1-mini",
-      )
+      const model = openai
+        .configure({ baseURL: "https://api.openai.test/v1/", apiKey: "test" })
+        .responses("gpt-4.1-mini")
 
       const response = yield* LLMClient.generate(ai.request({ model, prompt: "hi" }), { webSocket }).pipe(
         Effect.provide(LLMClient.layer.pipe(Layer.provide(deps))),
@@ -1067,7 +1069,7 @@ describe("OpenAI Responses route", () => {
       const body = yield* Ref.make("")
       const response = yield* LLMClient.generate(
         ai.request({
-          model: OpenAI.configure({ baseURL: "https://api.openai.test/v1/", apiKey: "test" }).responses("gpt-4.1-mini"),
+          model: openai.configure({ baseURL: "https://api.openai.test/v1/", apiKey: "test" }).responses("gpt-4.1-mini"),
           prompt: "Say hello.",
           http: {
             body: {
@@ -1132,7 +1134,7 @@ describe("OpenAI Responses route", () => {
       const body = yield* Ref.make("")
       yield* LLMClient.generate(
         ai.request({
-          model: OpenAI.configure({ baseURL: "https://api.openai.test/v1/", apiKey: "test" }).responses("gpt-4.1-mini"),
+          model: openai.configure({ baseURL: "https://api.openai.test/v1/", apiKey: "test" }).responses("gpt-4.1-mini"),
           prompt: "Say \uD800hello \u{1F600}.",
           http: { body: { metadata: { source: "overlay\uDC00" } } },
         }),
@@ -1215,13 +1217,13 @@ describe("OpenAI Responses route", () => {
       )
       const cases = [
         {
-          model: Azure.configure({ resourceName: "opencode-test", apiKey: "azure-key" }).responses("deployment"),
+          model: azure.configure({ resourceName: "opencode-test", apiKey: "azure-key" }).responses("deployment"),
           headers: { "api-key": "azure-key", authorization: undefined },
         },
         {
-          model: Azure.configure({ resourceName: "opencode-test", auth: Auth.bearer("entra-token") }).responses(
-            "deployment",
-          ),
+          model: azure
+            .configure({ resourceName: "opencode-test", auth: Auth.bearer("entra-token") })
+            .responses("deployment"),
           headers: { "api-key": undefined, authorization: "Bearer entra-token" },
         },
       ]
@@ -1259,25 +1261,29 @@ describe("OpenAI Responses route", () => {
     Effect.gen(function* () {
       const cases = [
         {
-          model: Azure.configure({
-            resourceName: "opencode-test",
-            apiKey: "azure-key",
-            apiVersion: "2025-04-01-preview",
-          }).responses("deployment"),
+          model: azure
+            .configure({
+              resourceName: "opencode-test",
+              apiKey: "azure-key",
+              apiVersion: "2025-04-01-preview",
+            })
+            .responses("deployment"),
           url: "https://opencode-test.openai.azure.com/openai/v1/responses?api-version=2025-04-01-preview",
         },
         {
-          model: Azure.configure({
-            resourceName: "opencode-test",
-            apiKey: "azure-key",
-            useDeploymentBasedUrls: true,
-          }).responses("deployment"),
+          model: azure
+            .configure({
+              resourceName: "opencode-test",
+              apiKey: "azure-key",
+              useDeploymentBasedUrls: true,
+            })
+            .responses("deployment"),
           url: "https://opencode-test.openai.azure.com/openai/deployments/deployment/responses?api-version=v1",
         },
         {
-          model: Azure.configure({ baseURL: "https://gateway.example/azure", apiKey: "azure-key" }).responses(
-            "deployment",
-          ),
+          model: azure
+            .configure({ baseURL: "https://gateway.example/azure", apiKey: "azure-key" })
+            .responses("deployment"),
           url: "https://gateway.example/azure/responses",
         },
       ]
@@ -1350,7 +1356,7 @@ describe("OpenAI Responses route", () => {
 
       yield* LLMClient.stream(
         ai.request({
-          model: OpenAI.configure({ baseURL: "https://api.openai.test/v1/", apiKey: "test" }).responses("gpt-4.1-mini"),
+          model: openai.configure({ baseURL: "https://api.openai.test/v1/", apiKey: "test" }).responses("gpt-4.1-mini"),
           prompt: "Say hello.",
         }),
         { webSocket },
@@ -1393,9 +1399,9 @@ describe("OpenAI Responses route", () => {
       const errors = yield* Effect.forEach(events, (event) =>
         LLMClient.generate(
           ai.request({
-            model: OpenAI.configure({ baseURL: "https://api.openai.test/v1/", apiKey: "test" }).responses(
-              "gpt-4.1-mini",
-            ),
+            model: openai
+              .configure({ baseURL: "https://api.openai.test/v1/", apiKey: "test" })
+              .responses("gpt-4.1-mini"),
             prompt: "Say hello.",
           }),
           {
@@ -1460,9 +1466,9 @@ describe("OpenAI Responses route", () => {
             close: Effect.void,
           }),
       })
-      const model = OpenAI.configure({ baseURL: "https://api.openai.test/v1/", apiKey: "test" }).responses(
-        "gpt-4.1-mini",
-      )
+      const model = openai
+        .configure({ baseURL: "https://api.openai.test/v1/", apiKey: "test" })
+        .responses("gpt-4.1-mini")
 
       const errors = yield* Effect.forEach(["first", "second"], (prompt) =>
         LLMClient.generate(ai.request({ model, prompt }), { webSocket }).pipe(
@@ -1519,11 +1525,13 @@ describe("OpenAI Responses route", () => {
     Effect.gen(function* () {
       yield* LLMClient.generate(
         LLMRequest.update(request, {
-          model: Azure.configure({
-            baseURL: "https://opencode-test.openai.azure.com/openai/",
-            apiKey: "azure-key",
-            headers: { authorization: "Bearer stale" },
-          }).responses("gpt-4.1-mini"),
+          model: azure
+            .configure({
+              baseURL: "https://opencode-test.openai.azure.com/openai/",
+              apiKey: "azure-key",
+              headers: { authorization: "Bearer stale" },
+            })
+            .responses("gpt-4.1-mini"),
         }),
       ).pipe(
         Effect.provide(
@@ -1546,7 +1554,7 @@ describe("OpenAI Responses route", () => {
   it.effect("loads OpenAI default auth from Effect Config", () =>
     LLMClient.generate(
       LLMRequest.update(request, {
-        model: OpenAI.configure({ baseURL: "https://api.openai.test/v1/" }).responses("gpt-4.1-mini"),
+        model: openai.configure({ baseURL: "https://api.openai.test/v1/" }).responses("gpt-4.1-mini"),
       }),
     ).pipe(
       configEnv({ OPENAI_API_KEY: "env-key" }),
@@ -1567,10 +1575,12 @@ describe("OpenAI Responses route", () => {
   it.effect("lets explicit auth override OpenAI default API key auth", () =>
     LLMClient.generate(
       LLMRequest.update(request, {
-        model: OpenAI.configure({
-          baseURL: "https://api.openai.test/v1/",
-          auth: Auth.bearer("oauth-token"),
-        }).responses("gpt-4.1-mini"),
+        model: openai
+          .configure({
+            baseURL: "https://api.openai.test/v1/",
+            auth: Auth.bearer("oauth-token"),
+          })
+          .responses("gpt-4.1-mini"),
       }),
     ).pipe(
       Effect.provide(
@@ -1919,9 +1929,9 @@ describe("OpenAI Responses route", () => {
         ),
       )
 
-      const meta = Meta.configure({ apiKey: "test" }).responses("muse-spark-1.3")
+      const metaModel = meta.configure({ apiKey: "test" }).responses("muse-spark-1.3")
       const metaRequest = ai.request({
-        model: meta,
+        model: metaModel,
         messages: [
           Message.assistant([
             ToolCallPart.make({ id: "call_video", name: "record", input: {} }),
@@ -2020,14 +2030,14 @@ describe("OpenAI Responses route", () => {
 
   it.effect("sends the cache TTL as prompt_cache_options, or prompt_cache_retention for 24h", () =>
     Effect.gen(function* () {
-      const model = OpenAI.configure({ baseURL: "https://api.openai.test/v1/", apiKey: "test" })
+      const model = openai.configure({ baseURL: "https://api.openai.test/v1/", apiKey: "test" })
       const options = yield* compileRequest(
-        ai.request({ model: model.model("gpt-5.6"), prompt: "hi", cache: { ttl: "30m" } }),
+        ai.request({ model: model("gpt-5.6"), prompt: "hi", cache: { ttl: "30m" } }),
       )
       const retention = yield* compileRequest(
-        ai.request({ model: model.model("gpt-5.5"), prompt: "hi", cache: { ttl: "24h" } }),
+        ai.request({ model: model("gpt-5.5"), prompt: "hi", cache: { ttl: "24h" } }),
       )
-      const unset = yield* compileRequest(ai.request({ model: model.model("gpt-5.6"), prompt: "hi" }))
+      const unset = yield* compileRequest(ai.request({ model: model("gpt-5.6"), prompt: "hi" }))
 
       expect(options.body).toMatchObject({ prompt_cache_options: { ttl: "30m" } })
       expect(options.body).not.toHaveProperty("prompt_cache_retention")
@@ -2042,7 +2052,7 @@ describe("OpenAI Responses route", () => {
     Effect.gen(function* () {
       const prepared = yield* compileRequest(
         ai.request({
-          model: OpenAI.configure({ baseURL: "https://api.openai.test/v1/", apiKey: "test" }).model("gpt-5.2"),
+          model: openai.configure({ baseURL: "https://api.openai.test/v1/", apiKey: "test" })("gpt-5.2"),
           prompt: "think",
           promptCacheKey: "session_123",
           generation: { presencePenalty: 0.25, frequencyPenalty: -0.25 },
@@ -2184,7 +2194,7 @@ describe("OpenAI Responses route", () => {
       // `reasoning.encrypted_content` automatically.
       const prepared = yield* compileRequest(
         ai.request({
-          model: OpenAI.configure({ baseURL: "https://api.openai.test/v1/", apiKey: "test" }).responses("gpt-5.2"),
+          model: openai.configure({ baseURL: "https://api.openai.test/v1/", apiKey: "test" }).responses("gpt-5.2"),
           prompt: "hi",
         }),
       )
@@ -2199,7 +2209,7 @@ describe("OpenAI Responses route", () => {
     Effect.gen(function* () {
       const prepared = yield* compileRequest(
         ai.request({
-          model: OpenAI.configure({ baseURL: "https://api.openai.test/v1/", apiKey: "test" }).responses("gpt-5.2"),
+          model: openai.configure({ baseURL: "https://api.openai.test/v1/", apiKey: "test" }).responses("gpt-5.2"),
           prompt: "hi",
           providerOptions: { include: [] },
         }),
@@ -2213,10 +2223,10 @@ describe("OpenAI Responses route", () => {
     Effect.gen(function* () {
       const prepared = yield* compileRequest(
         ai.request({
-          model: OpenAI.configure({
+          model: openai.configure({
             baseURL: "https://api.openai.test/v1/",
             apiKey: "test",
-          }).model("gpt-4.1-mini"),
+          })("gpt-4.1-mini"),
           prompt: "no cache",
           promptCacheKey: "request_cache",
         }),
@@ -4016,7 +4026,7 @@ describe("OpenAI Responses route", () => {
 
   it.effect("continues stateless hosted image generation with the generated image", () =>
     Effect.gen(function* () {
-      const imageTool = OpenAI.imageGeneration({ action: "edit" })
+      const imageTool = openai.imageGeneration({ action: "edit" })
       const prepared = yield* compileRequest(
         ai.request({
           model,

@@ -15,7 +15,7 @@ import {
 import { Auth, Endpoint, LLMClient, Route } from "../../src/route.js"
 import { compileRequest } from "../../src/route/client.js"
 import { AnthropicMessages } from "../../src/protocols/anthropic-messages.js"
-import { GoogleVertexMessages, Meta } from "../../src/providers.js"
+import { googleVertexMessages, meta } from "../../src/providers.js"
 import { continuationRequest, nativeAnthropicMessagesContinuation } from "../continuation-scenarios.js"
 import { it } from "../lib/effect.js"
 import { dynamicResponse, fixedResponse } from "../lib/http.js"
@@ -38,11 +38,11 @@ const compileUnsignedReasoning = (model: LLMRequest["model"]) =>
     }),
   )
 
-const vertexOpus48 = GoogleVertexMessages.configure({
+const vertexOpus48 = googleVertexMessages.configure({
   accessToken: "test",
   location: "global",
   project: "test",
-}).model("claude-opus-4-8")
+})("claude-opus-4-8")
 
 const request = ai.request({
   id: "req_1",
@@ -930,8 +930,8 @@ describe("Anthropic Messages route", () => {
 
   it.effect("moves Meta tool result videos after consecutive results", () =>
     Effect.gen(function* () {
-      const meta = ai.request({
-        model: Meta.configure({ apiKey: "test" }).messages("video-model"),
+      const metaModel = ai.request({
+        model: meta.configure({ apiKey: "test" }).messages("video-model"),
         messages: [
           Message.assistant([
             ToolCallPart.make({ id: "first", name: "read", input: {} }),
@@ -943,7 +943,7 @@ describe("Anthropic Messages route", () => {
         ],
         cache: "none",
       })
-      const hoisted = yield* compileRequest(meta)
+      const hoisted = yield* compileRequest(metaModel)
       expect(hoisted.body.messages).toMatchObject([
         {
           role: "assistant",
@@ -964,7 +964,7 @@ describe("Anthropic Messages route", () => {
         { role: "assistant", content: [{ type: "text", text: "Observed." }] },
       ])
 
-      const generic = yield* compileRequest(LLMRequest.update(meta, { model: customModel }))
+      const generic = yield* compileRequest(LLMRequest.update(metaModel, { model: customModel }))
       expect(generic.body.messages[1]?.content).toEqual([
         { type: "tool_result", tool_use_id: "first", content: [video] },
         { type: "tool_result", tool_use_id: "second", content: [video] },
@@ -1059,7 +1059,9 @@ describe("Anthropic Messages route", () => {
         .model({ id: "kimi-k2.6" })
       const codingPrepared = yield* compileUnsignedReasoning(coding.model({ id: "k3" }))
       const moonshotPrepared = yield* compileUnsignedReasoning(moonshot)
-      const qwenPrepared = yield* compileUnsignedReasoning(coding.with({ provider: "opencode" }).model({ id: "qwen3.8-flash" }))
+      const qwenPrepared = yield* compileUnsignedReasoning(
+        coding.with({ provider: "opencode" }).model({ id: "qwen3.8-flash" }),
+      )
       const minimaxPrepared = yield* compileUnsignedReasoning(
         coding.with({ provider: "opencode-go" }).model({ id: "minimax-m3" }),
       )

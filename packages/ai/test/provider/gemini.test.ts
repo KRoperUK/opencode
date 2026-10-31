@@ -1,11 +1,22 @@
 import { describe, expect } from "bun:test"
 import { Deferred, Effect, Fiber } from "effect"
 import * as TestClock from "effect/testing/TestClock"
-import { ai, AIError, isRetryable, LLMEvent, LLMRequest, Media, Message, ToolCallPart, ToolDefinition, Usage } from "../../src/effect.js"
+import {
+  ai,
+  AIError,
+  isRetryable,
+  LLMEvent,
+  LLMRequest,
+  Media,
+  Message,
+  ToolCallPart,
+  ToolDefinition,
+  Usage,
+} from "../../src/effect.js"
 import { Auth, LLMClient } from "../../src/route.js"
 import { compileRequest } from "../../src/route/client.js"
 import * as Gemini from "../../src/protocols/gemini.js"
-import { Google } from "../../src/providers.js"
+import { google } from "../../src/providers.js"
 import { it } from "../lib/effect.js"
 import { dynamicResponse, fixedResponse } from "../lib/http.js"
 import { sseEvents, sseRaw } from "../lib/sse.js"
@@ -624,9 +635,7 @@ describe("Gemini route", () => {
           },
           {
             role: "user",
-            parts: [
-              { functionResponse: { id: "call_video", name: "read", response: { name: "read", content: "" } } },
-            ],
+            parts: [{ functionResponse: { id: "call_video", name: "read", response: { name: "read", content: "" } } }],
           },
           {
             role: "user",
@@ -640,7 +649,7 @@ describe("Gemini route", () => {
 
       const interactions = yield* compileRequest(
         ai.request({
-          model: Google.configure({ apiKey: "test" }).interactions("gemini-3-flash-preview"),
+          model: google.configure({ apiKey: "test" }).interactions("gemini-3-flash-preview"),
           messages,
         }),
       )
@@ -2109,7 +2118,9 @@ describe("Gemini response continuation", () => {
   it.effect("forgets a block once the resumed request finishes", () =>
     Effect.gen(function* () {
       const server = scripted([
-        sseEvents(text("THIRTEEN", { continuationToken: "checkpoint-1" }), { promptFeedback: { blockReason: "OTHER" } }),
+        sseEvents(text("THIRTEEN", { continuationToken: "checkpoint-1" }), {
+          promptFeedback: { blockReason: "OTHER" },
+        }),
         sseEvents(text(" THOUSAND", { finishReason: "STOP" })),
       ])
       const response = yield* LLMClient.generate(continuedRequest).pipe(Effect.provide(server.layer))
@@ -2204,13 +2215,17 @@ describe("Gemini response continuation", () => {
           pull(controller) {
             if (sent) return new Promise<void>(() => Deferred.doneUnsafe(stalled, Effect.void))
             sent = true
-            controller.enqueue(new TextEncoder().encode(chunks(text("THIRTEEN", { continuationToken: "checkpoint-1" }))))
+            controller.enqueue(
+              new TextEncoder().encode(chunks(text("THIRTEEN", { continuationToken: "checkpoint-1" }))),
+            )
           },
         }),
       ])
-      const fiber = yield* LLMClient.generate(
-        LLMRequest.update(continuedRequest, { http: { timeout: 1_000 } }),
-      ).pipe(Effect.provide(server.layer), Effect.flip, Effect.forkChild({ startImmediately: true }))
+      const fiber = yield* LLMClient.generate(LLMRequest.update(continuedRequest, { http: { timeout: 1_000 } })).pipe(
+        Effect.provide(server.layer),
+        Effect.flip,
+        Effect.forkChild({ startImmediately: true }),
+      )
       yield* Deferred.await(stalled)
       yield* TestClock.adjust("1 second")
       const error = yield* Fiber.join(fiber)

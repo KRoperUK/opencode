@@ -15,10 +15,10 @@ import {
   ToolDefinition,
   Usage,
 } from "../../src/effect.js"
-import * as Azure from "../../src/providers/azure.js"
-import * as OpenAI from "../../src/providers/openai.js"
-import * as OpenAICompatible from "../../src/providers/openai-compatible.js"
-import * as XAI from "../../src/providers/xai.js"
+import { azure } from "../../src/providers/azure.js"
+import { openai } from "../../src/providers/openai.js"
+import { openaiCompatible } from "../../src/providers/openai-compatible.js"
+import { xai } from "../../src/providers/xai.js"
 import * as OpenAIChat from "../../src/protocols/openai-chat.js"
 import { ProviderShared } from "../../src/protocols/shared.js"
 import { Auth, LLMClient } from "../../src/route.js"
@@ -79,17 +79,17 @@ describe("OpenAI Chat route", () => {
 
   it.effect("sends store only to OpenAI and Azure unless compatibility opts in", () =>
     Effect.gen(function* () {
-      const compatible = OpenAICompatible.configure({ baseURL: "https://api.compatible.test/v1", apiKey: "test" })
+      const compatible = openaiCompatible.configure({ baseURL: "https://api.compatible.test/v1", apiKey: "test" })
       const omitted = yield* compileRequest(
         ai.request({
-          model: compatible.model("compatible-model"),
+          model: compatible("compatible-model"),
           prompt: "Hello",
           providerOptions: { store: true },
         }),
       )
       const optedIn = yield* compileRequest(
         ai.request({
-          model: LanguageModel.update(compatible.model("compatible-model"), {
+          model: LanguageModel.update(compatible("compatible-model"), {
             compatibility: { supportsStore: true },
           }),
           prompt: "Hello",
@@ -97,17 +97,15 @@ describe("OpenAI Chat route", () => {
       )
       const openaiHost = yield* compileRequest(
         ai.request({
-          model: OpenAICompatible.configure({ baseURL: "https://api.openai.com/v1", apiKey: "test" }).model(
-            "gpt-4o-mini",
-          ),
+          model: openaiCompatible.configure({ baseURL: "https://api.openai.com/v1", apiKey: "test" })("gpt-4o-mini"),
           prompt: "Hello",
         }),
       )
-      const azure = yield* compileRequest(
+      const azureModel = yield* compileRequest(
         ai.request({
-          model: Azure.configure({ baseURL: "https://opencode-test.openai.azure.com/openai/", apiKey: "test" }).chat(
-            "gpt-4o-mini",
-          ),
+          model: azure
+            .configure({ baseURL: "https://opencode-test.openai.azure.com/openai/", apiKey: "test" })
+            .chat("gpt-4o-mini"),
           prompt: "Hello",
         }),
       )
@@ -115,7 +113,7 @@ describe("OpenAI Chat route", () => {
       expect(omitted.body).not.toHaveProperty("store")
       expect(optedIn.body.store).toBe(false)
       expect(openaiHost.body.store).toBe(false)
-      expect(azure.body.store).toBe(false)
+      expect(azureModel.body.store).toBe(false)
     }),
   )
 
@@ -293,7 +291,7 @@ describe("OpenAI Chat route", () => {
     Effect.gen(function* () {
       const prepared = yield* compileRequest(
         ai.request({
-          model: OpenAI.configure({ baseURL: "https://api.openai.test/v1/", apiKey: "test" }).chat("gpt-4o-mini"),
+          model: openai.configure({ baseURL: "https://api.openai.test/v1/", apiKey: "test" }).chat("gpt-4o-mini"),
           prompt: "think",
           providerOptions: { reasoningEffort: "max" },
         }),
@@ -308,7 +306,7 @@ describe("OpenAI Chat route", () => {
     Effect.gen(function* () {
       const prepared = yield* compileRequest(
         ai.request({
-          model: OpenAI.configure({ baseURL: "https://api.openai.test/v1/", apiKey: "test" }).chat("gpt-4o-mini"),
+          model: openai.configure({ baseURL: "https://api.openai.test/v1/", apiKey: "test" }).chat("gpt-4o-mini"),
           prompt: "think",
           providerOptions: { store: true, reasoningEffort: "max", topLogprobs: 25 },
         }),
@@ -323,7 +321,7 @@ describe("OpenAI Chat route", () => {
     Effect.gen(function* () {
       const prepared = yield* compileRequest(
         ai.request({
-          model: OpenAI.configure({ baseURL: "https://api.openai.test/v1/", apiKey: "test" }).chat("gpt-5-nano"),
+          model: openai.configure({ baseURL: "https://api.openai.test/v1/", apiKey: "test" }).chat("gpt-5-nano"),
           prompt: "Hello",
           tools: [ToolDefinition.make({ name: "lookup", description: "Lookup data", inputSchema: { type: "object" } })],
           providerOptions: {
@@ -390,7 +388,7 @@ describe("OpenAI Chat route", () => {
     Effect.gen(function* () {
       const prepared = yield* compileRequest(
         ai.request({
-          model: OpenAICompatible.configure({ baseURL: "https://api.compatible.test/v1", apiKey: "test" }).model(
+          model: openaiCompatible.configure({ baseURL: "https://api.compatible.test/v1", apiKey: "test" })(
             "compatible-model",
           ),
           prompt: "Hello",
@@ -406,10 +404,10 @@ describe("OpenAI Chat route", () => {
     Effect.gen(function* () {
       const prepared = yield* compileRequest(
         ai.request({
-          model: OpenAICompatible.configure({
+          model: openaiCompatible.configure({
             baseURL: "https://api.compatible.test/v1",
             apiKey: "test",
-          }).model("compatible-model"),
+          })("compatible-model"),
           prompt: "Hello",
           promptCacheKey: "session_123",
         }),
@@ -437,7 +435,7 @@ describe("OpenAI Chat route", () => {
   it.effect("maps the xAI Chat prompt cache key to conversation affinity header only", () =>
     LLMClient.generate(
       ai.request({
-        model: XAI.configure({ apiKey: "test", baseURL: "https://api.x.ai/v1" }).chat("grok-4.5"),
+        model: xai.configure({ apiKey: "test", baseURL: "https://api.x.ai/v1" }).chat("grok-4.5"),
         prompt: "Hello",
         promptCacheKey: "session_123",
       }),
@@ -498,11 +496,13 @@ describe("OpenAI Chat route", () => {
   it.effect("uses Azure api-key header for static OpenAI Chat keys", () =>
     LLMClient.generate(
       LLMRequest.update(request, {
-        model: Azure.configure({
-          baseURL: "https://opencode-test.openai.azure.com/openai/",
-          apiKey: "azure-key",
-          headers: { authorization: "Bearer stale" },
-        }).chat("gpt-4o-mini"),
+        model: azure
+          .configure({
+            baseURL: "https://opencode-test.openai.azure.com/openai/",
+            apiKey: "azure-key",
+            headers: { authorization: "Bearer stale" },
+          })
+          .chat("gpt-4o-mini"),
       }),
     ).pipe(
       Effect.provide(
@@ -638,7 +638,7 @@ describe("OpenAI Chat route", () => {
       const id = `call_${"a".repeat(48)}`
       const models = [
         model,
-        Azure.configure({ baseURL: "https://opencode-test.openai.azure.com/openai/", apiKey: "test" }).chat("gpt-4o"),
+        azure.configure({ baseURL: "https://opencode-test.openai.azure.com/openai/", apiKey: "test" }).chat("gpt-4o"),
       ]
 
       yield* Effect.forEach(models, (selected) =>
