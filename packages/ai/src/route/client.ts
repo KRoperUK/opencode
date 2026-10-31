@@ -34,6 +34,7 @@ import {
   mergeGenerationOptions,
   mergeHttpOptions,
   mergeProviderOptions,
+  generationFields,
   requestHttpOptions,
   transportFields,
   BaseRequestTransport,
@@ -286,10 +287,9 @@ const resolveRequestOptions = (request: TextRequest): TextRequest => {
   const normalized = messages === request.messages ? request : { ...request, messages }
   const routeDefaults = normalized.model.route.defaults
   const modelDefaults = normalized.model.defaults
-  const generation = mergeGenerationOptions(routeDefaults.generation, modelDefaults?.generation, normalized.generation)
   return {
     ...normalized,
-    generation: generation ?? new GenerationOptions({}),
+    ...generationFields(mergeGenerationOptions(routeDefaults.generation, modelDefaults?.generation, normalized)),
     providerOptions: mergeProviderOptions(
       routeDefaults.providerOptions,
       modelDefaults?.providerOptions,
@@ -612,14 +612,15 @@ const restoreClasses = (request: TextRequest): TextRequest => ({
   messages: request.messages.map(Message.make),
   tools: request.tools.map(ToolEntry.make),
   toolChoice: request.toolChoice === undefined ? undefined : ToolChoice.make(request.toolChoice),
-  generation: request.generation === undefined ? undefined : GenerationOptions.make(request.generation),
 })
 
-const validateTransport = Schema.decodeUnknownEffect(BaseRequestTransport)
+const validateRequest = Schema.decodeUnknownEffect(
+  Schema.Struct({ ...BaseRequestTransport.fields, ...GenerationOptions.fields }),
+)
 
-// Requests are plain objects, so their transport fields are checked when they run rather than when they are built.
-const checkTransport = (request: TextRequest) =>
-  validateTransport(request).pipe(
+// Requests are plain objects, so their transport and generation fields are checked when they run, not when built.
+const checkRequest = (request: TextRequest) =>
+  validateRequest(request).pipe(
     Effect.mapError((error) => ProviderShared.invalidRequest(error.message, error)),
     Effect.asVoid,
   )
@@ -639,7 +640,7 @@ const compile = Effect.fn("LLM.compile")(function* (request: TextRequest, option
     return yield* ProviderShared.invalidRequest(
       "Local file references must be read with Media.file(path) before sending",
     )
-  yield* checkTransport(request)
+  yield* checkRequest(request)
   const resolved = prepareRequest(request)
   const route = resolved.model.route
 
@@ -732,7 +733,7 @@ export const layer: Layer.Layer<Service, never, RequestExecutor.Service> = Layer
       options?: EndpointCompactOptions,
     ): Effect.Effect<CompactionResponse, AIError>
     function compact(request: TextRequest, options?: EndpointCompactOptions | TriggerCompactOptions) {
-      return checkTransport(request).pipe(
+      return checkRequest(request).pipe(
         Effect.andThen((): Effect.Effect<CompactionResponse | CompactionCheckpointResponse, AIError> => {
           if (options?.mechanism === "trigger" && canCompact(request, options))
             return request.model.route.compact.trigger(prepareRequest(request), executor, options)

@@ -154,7 +154,8 @@ it.effect("Alibaba keeps native reasoning controls and future efforts on their s
         ai.request({
           model: provider.chat("qwen3.7-plus"),
           tools: [tool],
-          generation: { maxTokens: 1234, topK: 20 },
+          maxTokens: 1234,
+          topK: 20,
           providerOptions: {
             enableThinking,
             thinkingBudget: 512,
@@ -224,7 +225,7 @@ it.effect("Alibaba fits explicit thinking budgets to half the output limit", () 
         ai.request({
           model: provider.chat("qwen3.7-plus"),
           prompt: "hi",
-          ...(maxTokens === undefined ? {} : { generation: { maxTokens } }),
+          ...(maxTokens === undefined ? {} : { maxTokens }),
           providerOptions: { enableThinking: true, thinkingBudget: 131_071 },
         }),
       ).pipe(Effect.map((prepared) => prepared.body.thinking_budget))
@@ -232,7 +233,7 @@ it.effect("Alibaba fits explicit thinking budgets to half the output limit", () 
       ai.request({
         model: provider.messages("qwen3.7-plus"),
         prompt: "hi",
-        generation: { maxTokens: 32_000 },
+        maxTokens: 32_000,
         providerOptions: { thinking: { type: "enabled", budgetTokens: 131_071 } },
       }),
     )

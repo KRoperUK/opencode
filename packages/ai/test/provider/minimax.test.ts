@@ -80,7 +80,7 @@ describe("MiniMax provider", () => {
       const chat = yield* compileRequest(
         ai.request({
           model: minimax.chat("MiniMax-M3"),
-          generation: { maxTokens: 128 },
+          maxTokens: 128,
           providerOptions: { thinking: { type: "disabled" }, reasoningSplit: false },
         }),
       )

@@ -564,12 +564,11 @@ const applyThinkingBindingDefault = (request: TextRequest, thinking: Readonly<Re
 const fromRequest = Effect.fn("BedrockConverse.fromRequest")(function* (request: TextRequest) {
   const toolChoice = request.toolChoice ? yield* lowerToolChoice(request.toolChoice) : undefined
   const flattened = ProviderShared.flattenToolRequest(request)
-  const generation = request.generation
   const options = yield* decodeOptions(request.providerOptions ?? {})
   const maxTokens =
     isNova2(request.model) && (options.effort === "high" || isHighReasoningEffort(request.http?.body))
       ? undefined
-      : generation?.maxTokens
+      : request.maxTokens
   const thinking = applyThinkingBindingDefault(
     request,
     (() => {
@@ -587,7 +586,7 @@ const fromRequest = Effect.fn("BedrockConverse.fromRequest")(function* (request:
     })(),
   )
   const additionalModelRequestFields = {
-    ...(generation?.topK === undefined ? {} : { top_k: generation.topK }),
+    ...(request.topK === undefined ? {} : { top_k: request.topK }),
     ...(thinking === undefined ? {} : { thinking }),
     ...(options.effort === undefined ? {} : effortFields(request.model, options.effort)),
     // Converse takes Anthropic betas in the body, and Bedrock rejects `block_binding` without this one.
@@ -615,16 +614,16 @@ const fromRequest = Effect.fn("BedrockConverse.fromRequest")(function* (request:
   const inferenceConfig = (() => {
     if (
       maxTokens === undefined &&
-      generation?.temperature === undefined &&
-      generation?.topP === undefined &&
-      (generation?.stop === undefined || generation.stop.length === 0)
+      request.temperature === undefined &&
+      request.topP === undefined &&
+      (request.stop === undefined || request.stop.length === 0)
     )
       return undefined
     return {
       maxTokens,
-      temperature: generation?.temperature,
-      topP: generation?.topP,
-      stopSequences: generation?.stop,
+      temperature: request.temperature,
+      topP: request.topP,
+      stopSequences: request.stop,
     }
   })()
   return {

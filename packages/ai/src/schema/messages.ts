@@ -5,12 +5,12 @@ import {
   CacheHint,
   type BaseRequest,
   type CachePolicy,
-  type GenerationOptions,
   JsonSchema,
   type LanguageModel,
   type LanguageModelProviderOptions,
   ProviderMetadata,
   ReasoningEffort,
+  type GenerationOptionsFields,
 } from "./options.js"
 import { ProviderID } from "./ids.js"
 import { Media } from "../media.js"
@@ -406,13 +406,13 @@ export namespace ToolChoice {
  * `{ ...request, messages: [...request.messages, next] }`, or pass the edited object back to `ai.request`.
  */
 export interface TextRequest<Model extends LanguageModel = LanguageModel>
-  extends BaseRequest<Model, LanguageModelProviderOptions<Model>> {
+  extends BaseRequest<Model, LanguageModelProviderOptions<Model>>,
+    GenerationOptionsFields {
   readonly id?: string
   readonly system: ReadonlyArray<SystemPart>
   readonly messages: ReadonlyArray<Message>
   readonly tools: ReadonlyArray<ToolEntry>
   readonly toolChoice?: ToolChoice
-  readonly generation?: GenerationOptions
   readonly cache?: CachePolicy
   /** Stable cache affinity for protocols that support provider-managed prompt caching. */
   readonly promptCacheKey?: string

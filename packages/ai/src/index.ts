@@ -346,6 +346,7 @@ export {
   RequestEncoding,
   HttpOptions,
   GenerationOptions,
+  GENERATION_KEYS,
   LanguageModelDefaults,
   ReasoningEfforts,
   ReasoningEffort,
